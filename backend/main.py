@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 import uuid
 import json
 import asyncio
@@ -31,6 +32,14 @@ app = FastAPI(
         "including crawl execution, finding management, and "
         "server-sent event streaming for scan progress."
     ),
+)
+
+# Mount static assets (including the backend favicon)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+app.mount(
+    "/static",
+    StaticFiles(directory=os.path.join(BASE_DIR, "static")),
+    name="static",
 )
 
 # Add startup and shutdown events
@@ -63,7 +72,7 @@ async def custom_documentation():
     return get_swagger_ui_html(
         openapi_url="/openapi.json",
         title="Swarm Scanner API Documentation",
-        swagger_favicon_url="https://fastapi.tiangolo.com/img/favicon.png",
+        swagger_favicon_url="/static/Favicon.png",
     )
 
 
