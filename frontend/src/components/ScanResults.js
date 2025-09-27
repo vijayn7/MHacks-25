@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import {
@@ -9,8 +9,7 @@ import {
   Copy,
   RefreshCw,
   Clock,
-  CheckCircle,
-  ExternalLink
+  CheckCircle
 } from 'lucide-react';
 
 const ScanResults = () => {
@@ -20,6 +19,26 @@ const ScanResults = () => {
   const [selectedFinding, setSelectedFinding] = useState(null);
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState([]);
+
+  const fetchScanStatus = useCallback(async () => {
+    try {
+      const response = await axios.get(`/runs/${runId}`);
+      setScanStatus(response.data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Failed to fetch scan status:', error);
+      setLoading(false);
+    }
+  }, [runId]);
+
+  const fetchFindings = useCallback(async () => {
+    try {
+      const response = await axios.get(`/runs/${runId}/findings`);
+      setFindings(response.data);
+    } catch (error) {
+      console.error('Failed to fetch findings:', error);
+    }
+  }, [runId]);
 
   useEffect(() => {
     if (!runId) return;
@@ -51,27 +70,7 @@ const ScanResults = () => {
     return () => {
       eventSource.close();
     };
-  }, [runId]);
-
-  const fetchScanStatus = async () => {
-    try {
-      const response = await axios.get(`/runs/${runId}`);
-      setScanStatus(response.data);
-      setLoading(false);
-    } catch (error) {
-      console.error('Failed to fetch scan status:', error);
-      setLoading(false);
-    }
-  };
-
-  const fetchFindings = async () => {
-    try {
-      const response = await axios.get(`/runs/${runId}/findings`);
-      setFindings(response.data);
-    } catch (error) {
-      console.error('Failed to fetch findings:', error);
-    }
-  };
+  }, [runId, fetchScanStatus, fetchFindings]);
 
   const getSeverityColor = (severity) => {
     switch (severity) {
