@@ -1,0 +1,186 @@
+# Swarm - Web Security Scanner
+# .gitignore for team collaboration
+
+# Environment variables (IMPORTANT - Never commit secrets!)
+.env
+.env.local
+.env.production
+.env.development
+
+# Database credentials and MongoDB connection strings
+backend/.env
+**/config/database.yml
+**/config/secrets.yml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.eslintcache
+
+# React build
+frontend/build/
+frontend/dist/
+
+# Runtime artifacts (scan results)
+artifacts/
+screenshots/
+crawl-output/
+scan-results/
+*.png
+*.jpg
+*.jpeg
+reports/
+*.pdf
+
+# Logs
+*.log
+logs/
+backend.log
+frontend.log
+demo-app.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# MongoDB local
+data/
+dump/
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Lock files (optional - team can decide)
+# package-lock.json
+# yarn.lock
+
+# Production builds
+backend/dist/
+frontend/build/
+
+# Security scanner specific
+findings.json
+scan_*.json
+vulnerability_reports/
+
+# Local development only
+local_config.py
+dev_settings.js
+test_credentials.json
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Documentation builds
+docs/_build/
+site/
+
+# MacOS
+.AppleDouble
+.LSOverride
+
+# Windows
+*.lnk
+desktop.ini
+
+# Linux
+*~
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# VS Code
+.vscode/settings.json
+.vscode/launch.json
+.vscode/extensions.json
+.history/
+
+# Vim
+*.swp
+*.swo
+
+# Coverage reports
+coverage/
+.nyc_output/
+
+# ESLint cache
+.eslintcache
+
+# Prettier
+.prettierrc
+
+# Husky
+.husky/_/

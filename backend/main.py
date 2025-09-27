@@ -175,15 +175,20 @@ async def run_scan_worker(run_id: str, target_url: str, max_pages: int):
         if run_id in active_connections:
             active_connections[run_id].append({
                 "event_type": "status_update",
-                "data": {"status": "running", "message": "Starting scan..."},
+                "data": {"status": "running", "message": "Starting crawl..."},
                 "timestamp": datetime.now().isoformat()
             })
 
-        # Simulate scan progress (replace with actual scanner later)
-        await asyncio.sleep(2)
+        # Run real crawler
+        await run_real_crawler(run_id, target_url, max_pages)
 
-        # Create demo findings for testing
-        await create_demo_findings(run_id, target_url)
+        # Run real scanners on crawler output
+        await run_real_scanners(run_id, target_url)
+
+        # Fallback demo findings if no real findings found
+        existing_findings = await get_findings_by_run(run_id)
+        if not existing_findings:
+            await create_demo_findings(run_id, target_url)
 
         # Mark as completed
         await update_scan_run(run_id, {
@@ -284,6 +289,117 @@ async def create_demo_findings(run_id: str, target_url: str):
             })
 
         await asyncio.sleep(1)  # Simulate scan progress
+
+async def run_real_crawler(run_id: str, target_url: str, max_pages: int):
+    """Run the actual Playwright crawler"""
+    try:
+        # Import crawler locally to avoid startup issues
+        import sys
+        import os
+        sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'crawler'))
+
+        from crawler import WebCrawler
+
+        # Send crawling status
+        if run_id in active_connections:
+            active_connections[run_id].append({
+                "event_type": "status_update",
+                "data": {"status": "running", "message": f"Crawling {target_url}..."},
+                "timestamp": datetime.now().isoformat()
+            })
+
+        # Create artifacts directory
+        artifacts_dir = os.path.join(os.path.dirname(__file__), '..', 'artifacts')
+        os.makedirs(artifacts_dir, exist_ok=True)
+
+        # Run crawler
+        crawler = WebCrawler(run_id, artifacts_dir)
+        crawl_result = await crawler.crawl(target_url, max_pages)
+
+        print(f"✅ Crawl completed: {crawl_result}")
+
+        # Store crawled pages in database
+        if crawl_result and 'pages_crawled' in crawl_result:
+            # Send completion status
+            if run_id in active_connections:
+                active_connections[run_id].append({
+                    "event_type": "crawl_completed",
+                    "data": {
+                        "pages_crawled": crawl_result['pages_crawled'],
+                        "duration": crawl_result.get('duration_seconds', 0)
+                    },
+                    "timestamp": datetime.now().isoformat()
+                })
+
+    except Exception as e:
+        print(f"❌ Crawler error: {str(e)}")
+        if run_id in active_connections:
+            active_connections[run_id].append({
+                "event_type": "crawl_error",
+                "data": {"error": str(e)},
+                "timestamp": datetime.now().isoformat()
+            })
+
+async def run_real_scanners(run_id: str, target_url: str):
+    """Run real security scanners on crawler output"""
+    try:
+        import sys
+        import os
+        from pathlib import Path
+
+        # Add scanner directory to path
+        sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'scanner'))
+
+        # Send scanning status
+        if run_id in active_connections:
+            active_connections[run_id].append({
+                "event_type": "status_update",
+                "data": {"status": "running", "message": "Analyzing security headers..."},
+                "timestamp": datetime.now().isoformat()
+            })
+
+        # Check if crawler output exists
+        artifacts_dir = Path(os.path.dirname(__file__)) / '..' / 'artifacts' / run_id
+        pages_file = artifacts_dir / 'pages.json'
+
+        if pages_file.exists():
+            # Import and run header scanner
+            from header_scanner import HeaderScanner
+
+            scanner = HeaderScanner(run_id)
+            findings = scanner.scan_pages(pages_file)
+
+            print(f"✅ Header scanner found {len(findings)} issues")
+
+            # Store findings in database
+            for finding_data in findings:
+                await create_finding(finding_data)
+
+                # Send finding discovered event
+                if run_id in active_connections:
+                    active_connections[run_id].append({
+                        "event_type": "finding_discovered",
+                        "data": {
+                            "finding_id": finding_data["id"],
+                            "category": finding_data["category"],
+                            "severity": finding_data["severity"],
+                            "title": finding_data["title"]
+                        },
+                        "timestamp": datetime.now().isoformat()
+                    })
+
+                await asyncio.sleep(0.5)  # Small delay for UX
+        else:
+            print(f"❌ No crawler output found at {pages_file}")
+
+    except Exception as e:
+        print(f"❌ Scanner error: {str(e)}")
+        if run_id in active_connections:
+            active_connections[run_id].append({
+                "event_type": "scanner_error",
+                "data": {"error": str(e)},
+                "timestamp": datetime.now().isoformat()
+            })
 
 if __name__ == "__main__":
     import uvicorn
