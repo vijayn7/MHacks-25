@@ -75,6 +75,7 @@ screenshots/
 crawl-output/
 scan-results/
 *.png
+!**/favicon.png
 *.jpg
 *.jpeg
 reports/
