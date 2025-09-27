@@ -1,11 +1,15 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+
+// Serve static assets (including the demo favicon)
+app.use(express.static(path.join(__dirname, 'public')));
 
 // VULNERABILITY 1: Permissive CORS with credentials
 app.use(cors({
@@ -24,6 +28,7 @@ app.get('/', (req, res) => {
     <html>
     <head>
       <title>Vulnerable Demo App</title>
+      <link rel="icon" type="image/png" href="/Favicon.png" />
       <style>
         body { font-family: Arial, sans-serif; margin: 40px; }
         .form-group { margin: 20px 0; }
@@ -84,7 +89,10 @@ app.get('/search', (req, res) => {
   res.send(`
     <!DOCTYPE html>
     <html>
-    <head><title>Search Results</title></head>
+    <head>
+      <title>Search Results</title>
+      <link rel="icon" type="image/png" href="/Favicon.png" />
+    </head>
     <body>
       <h1>Search Results</h1>
       <p>You searched for: ${query}</p>
