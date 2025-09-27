@@ -190,11 +190,10 @@ async def run_scan_worker(run_id: str, target_url: str, max_pages: int):
         if not existing_findings:
             await create_demo_findings(run_id, target_url)
 
-        # Mark as completed
+        # Mark as completed (risk score will be updated by scanner)
         await update_scan_run(run_id, {
             "status": ScanStatus.COMPLETED,
-            "completed_at": datetime.now(),
-            "risk_score": 85
+            "completed_at": datetime.now()
         })
 
         # Send completion event
@@ -354,7 +353,7 @@ async def run_real_scanners(run_id: str, target_url: str):
         if run_id in active_connections:
             active_connections[run_id].append({
                 "event_type": "status_update",
-                "data": {"status": "running", "message": "Analyzing security headers..."},
+                "data": {"status": "running", "message": "Running comprehensive security analysis..."},
                 "timestamp": datetime.now().isoformat()
             })
 
@@ -363,32 +362,93 @@ async def run_real_scanners(run_id: str, target_url: str):
         pages_file = artifacts_dir / 'pages.json'
 
         if pages_file.exists():
-            # Import and run header scanner
-            from header_scanner import HeaderScanner
+            # Run the scanner orchestrator using subprocess to avoid import issues
+            import subprocess
+            
+            print(f"🔍 Running scanner orchestrator for run {run_id}")
+            
+            # Change to the project root directory
+            project_root = Path(os.path.dirname(__file__)) / '..'
+            scanner_script = project_root / 'scanner' / 'run_scanner.py'
+            
+            try:
+                # Run the scanner using subprocess
+                result = subprocess.run([
+                    'python3', str(scanner_script), 
+                    str(pages_file), 
+                    '--run-id', run_id,
+                    '--output-dir', str(project_root)
+                ], capture_output=True, text=True, cwd=str(project_root))
+                
+                print(f"🔍 Scanner subprocess completed with return code: {result.returncode}")
+                print(f"🔍 Scanner stdout: {result.stdout[-500:]}")  # Last 500 chars
+                if result.stderr:
+                    print(f"🔍 Scanner stderr: {result.stderr}")
+                
+                # Load findings from the comprehensive report
+                comprehensive_report_file = project_root / f'comprehensive_security_report_{run_id}.json'
+                
+                if comprehensive_report_file.exists():
+                    print(f"✅ Found comprehensive report: {comprehensive_report_file}")
+                    
+                    with open(comprehensive_report_file, 'r') as f:
+                        report_data = json.load(f)
+                    
+                    # Extract findings from the report
+                    all_findings = []
+                    scanner_findings = report_data.get('scanner_findings', {})
+                    print(f"🔍 Found {len(scanner_findings)} scanner result sets")
+                    
+                    for scanner_name, findings in scanner_findings.items():
+                        print(f"🔍 Processing {len(findings)} findings from {scanner_name}")
+                        for finding_data in findings:
+                            # Convert scanner format to database format
+                            db_finding = {
+                                "id": finding_data.get("id", str(uuid.uuid4())[:8]),
+                                "run_id": run_id,
+                                "category": finding_data.get("owasp_category", "unknown"),
+                                "severity": finding_data.get("severity", "medium"),
+                                "title": finding_data.get("title", "Security Issue"),
+                                "description": finding_data.get("description", "No description available"),
+                                "evidence": finding_data.get("evidence", {}),
+                                "fix_snippet": finding_data.get("fix_snippet", ""),
+                                "reproduce_command": finding_data.get("reproduce_command", ""),
+                                "priority_score": finding_data.get("priority_score", 50)
+                            }
+                            all_findings.append(db_finding)
 
-            scanner = HeaderScanner(run_id)
-            findings = scanner.scan_pages(pages_file)
+                    print(f"✅ Total findings to store: {len(all_findings)}")
+                    
+                    # Store findings in database
+                    for finding_data in all_findings:
+                        await create_finding(finding_data)
 
-            print(f"✅ Header scanner found {len(findings)} issues")
+                        # Send finding discovered event
+                        if run_id in active_connections:
+                            active_connections[run_id].append({
+                                "event_type": "finding_discovered",
+                                "data": {
+                                    "finding_id": finding_data["id"],
+                                    "category": finding_data["category"],
+                                    "severity": finding_data["severity"],
+                                    "title": finding_data["title"]
+                                },
+                                "timestamp": datetime.now().isoformat()
+                            })
 
-            # Store findings in database
-            for finding_data in findings:
-                await create_finding(finding_data)
+                        await asyncio.sleep(0.05)  # Small delay for UX
 
-                # Send finding discovered event
-                if run_id in active_connections:
-                    active_connections[run_id].append({
-                        "event_type": "finding_discovered",
-                        "data": {
-                            "finding_id": finding_data["id"],
-                            "category": finding_data["category"],
-                            "severity": finding_data["severity"],
-                            "title": finding_data["title"]
-                        },
-                        "timestamp": datetime.now().isoformat()
-                    })
-
-                await asyncio.sleep(0.5)  # Small delay for UX
+                    # Update risk score based on actual scan results
+                    risk_score = report_data.get('scan_summary', {}).get('risk_score', 0)
+                    await update_scan_run(run_id, {"risk_score": risk_score})
+                    print(f"✅ Updated risk score to: {risk_score}")
+                    
+                else:
+                    print(f"❌ Comprehensive report not found: {comprehensive_report_file}")
+                    
+            except Exception as e:
+                print(f"❌ Scanner subprocess error: {str(e)}")
+                raise
         else:
             print(f"❌ No crawler output found at {pages_file}")
 
