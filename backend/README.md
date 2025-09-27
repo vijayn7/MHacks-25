@@ -20,7 +20,7 @@ The API is available at `http://localhost:8000`. A tailored Swagger UI is served
 
 | Method | Path | Description |
 | ------ | ---- | ----------- |
-| `GET` | `/` | Basic service metadata, including API version. |
+| `GET` | `/` | Renders the custom Swagger UI for the API. |
 | `GET` | `/health` | Checks database connectivity and overall service health. |
 | `POST` | `/runs` | Creates a new scan run and schedules asynchronous execution. |
 | `GET` | `/runs/{run_id}` | Retrieves the status and metadata for a scan run. |
