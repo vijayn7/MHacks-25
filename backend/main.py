@@ -1,6 +1,8 @@
-from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse, StreamingResponse
 import uuid
 import json
 import asyncio
@@ -19,7 +21,17 @@ from database import (
 )
 from models import CreateScanRequest, ScanRunResponse, FindingResponse, ScanEvent, ScanStatus
 
-app = FastAPI(title="Swarm Scanner API", version="1.0.0")
+app = FastAPI(
+    title="Swarm Scanner API",
+    version="1.0.0",
+    docs_url=None,
+    redoc_url=None,
+    description=(
+        "REST API for coordinating website security scans, "
+        "including crawl execution, finding management, and "
+        "server-sent event streaming for scan progress."
+    ),
+)
 
 # Add startup and shutdown events
 app.add_event_handler("startup", startup_db)
@@ -40,6 +52,26 @@ active_connections: Dict[str, List] = {}
 @app.get("/")
 async def root():
     return {"message": "Swarm Scanner API", "version": "1.0.0"}
+
+
+@app.get("/documentation", include_in_schema=False)
+async def custom_documentation():
+    """Serve a tailored Swagger UI that documents the backend endpoints."""
+
+    return get_swagger_ui_html(
+        openapi_url="/openapi.json",
+        title="Swarm Scanner API Documentation",
+        swagger_favicon_url="https://fastapi.tiangolo.com/img/favicon.png",
+    )
+
+
+@app.get("/openapi.json", include_in_schema=False)
+async def openapi_spec():
+    """Expose the OpenAPI schema used by the custom Swagger UI."""
+
+    return JSONResponse(
+        get_openapi(title=app.title, version=app.version, routes=app.routes)
+    )
 
 @app.get("/health")
 async def health_check():
