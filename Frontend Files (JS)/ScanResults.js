@@ -19,68 +19,64 @@ import {
 } from "lucide-react"
 
 const ScanResults = () => {
-  const { runId } = useParams();
-  const [scanStatus, setScanStatus] = useState(null);
-  const [findings, setFindings] = useState([]);
-  const [selectedFinding, setSelectedFinding] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [events, setEvents] = useState([]);
+  const { runId } = useParams()
+  const [scanStatus, setScanStatus] = useState(null)
+  const [findings, setFindings] = useState([])
+  const [selectedFinding, setSelectedFinding] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [events, setEvents] = useState([])
 
   useEffect(() => {
-    if (!runId) return;
+    if (!runId) return
 
-    // Fetch initial scan status and findings
-    fetchScanStatus();
-    fetchFindings();
+    // Fetch initial scan status
+    fetchScanStatus()
 
     // Set up SSE for real-time updates
-    const eventSource = new EventSource(`http://localhost:8000/runs/${runId}/stream`);
+    const eventSource = new EventSource(`http://localhost:8000/runs/${runId}/stream`)
 
     eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      setEvents(prev => [...prev, data]);
+      const data = JSON.parse(event.data)
+      setEvents((prev) => [...prev, data])
 
-      if (data.event_type === 'status_update') {
-        setScanStatus(prev => ({ ...prev, status: data.data.status }));
-      } else if (data.event_type === 'finding_discovered') {
-        fetchFindings(); // Refresh findings when new one is discovered
-      } else if (data.event_type === 'scan_completed') {
-        fetchScanStatus();
-        fetchFindings();
+      if (data.event_type === "status_update") {
+        setScanStatus((prev) => ({ ...prev, status: data.data.status }))
+      } else if (data.event_type === "finding_discovered") {
+        fetchFindings() // Refresh findings when new one is discovered
+      } else if (data.event_type === "scan_completed") {
+        fetchScanStatus()
+        fetchFindings()
       }
-    };
+    }
 
     eventSource.onerror = (error) => {
-      console.error('SSE error:', error);
-    };
+      console.error("SSE error:", error)
+    }
 
     return () => {
-      eventSource.close();
-    };
-
-  }, [runId]);
+      eventSource.close()
+    }
+  }, [runId])
 
   const fetchScanStatus = async () => {
     try {
-      const response = await axios.get(`/runs/${runId}`);
-      setScanStatus(response.data);
-      setLoading(false);
+      const response = await axios.get(`/runs/${runId}`)
+      setScanStatus(response.data)
+      setLoading(false)
     } catch (error) {
-      console.error('Failed to fetch scan status:', error);
-      setLoading(false);
+      console.error("Failed to fetch scan status:", error)
+      setLoading(false)
     }
-  };
+  }
 
   const fetchFindings = async () => {
     try {
-      console.log(`🔍 Fetching findings for run ${runId}`);
-      const response = await axios.get(`/runs/${runId}/findings`);
-      console.log(`✅ Found ${response.data.length} findings:`, response.data.slice(0, 3));
-      setFindings(response.data);
+      const response = await axios.get(`/runs/${runId}/findings`)
+      setFindings(response.data)
     } catch (error) {
-      console.error('Failed to fetch findings:', error);
+      console.error("Failed to fetch findings:", error)
     }
-  };
+  }
 
   const getSeverityColor = (severity) => {
     switch (severity) {
@@ -99,28 +95,33 @@ const ScanResults = () => {
 
   const getSeverityIcon = (severity) => {
     switch (severity) {
-      case 'critical': return <AlertCircle className="h-4 w-4" />;
-      case 'high': return <AlertTriangle className="h-4 w-4" />;
-      case 'medium': return <AlertTriangle className="h-4 w-4" />;
-      case 'low': return <Info className="h-4 w-4" />;
-      default: return <Info className="h-4 w-4" />;
+      case "critical":
+        return <AlertCircle className="h-4 w-4" />
+      case "high":
+        return <AlertTriangle className="h-4 w-4" />
+      case "medium":
+        return <AlertTriangle className="h-4 w-4" />
+      case "low":
+        return <Info className="h-4 w-4" />
+      default:
+        return <Info className="h-4 w-4" />
     }
-  };
+  }
 
   const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(text)
     // TODO: Add toast notification
-  };
+  }
 
   const handleReplay = async (findingId) => {
     try {
-      const response = await axios.post(`/runs/${runId}/findings/${findingId}/replay`);
-      alert('Replay completed: ' + response.data.message);
+      const response = await axios.post(`/runs/${runId}/findings/${findingId}/replay`)
+      alert("Replay completed: " + response.data.message)
     } catch (error) {
-      console.error('Failed to replay finding:', error);
-      alert('Failed to replay finding');
+      console.error("Failed to replay finding:", error)
+      alert("Failed to replay finding")
     }
-  };
+  }
 
   if (loading) {
     return (
@@ -424,7 +425,7 @@ const ScanResults = () => {
         </motion.div>
       )}
     </motion.div>
-  );
-};
+  )
+}
 
-export default ScanResults;
+export default ScanResults
