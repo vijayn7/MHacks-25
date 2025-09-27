@@ -1,0 +1,441 @@
+{
+  "run_id": "099e7b71",
+  "scanner": "HeaderScanner",
+  "findings": [
+    {
+      "id": "89f35101",
+      "run_id": "099e7b71",
+      "category": "missing_headers",
+      "severity": "high",
+      "title": "Missing Content Security Policy",
+      "description": "Missing Content Security Policy header",
+      "evidence": {
+        "url": "http://localhost:3001/",
+        "missing_header": "content-security-policy",
+        "all_headers": [
+          "x-powered-by",
+          "access-control-allow-origin",
+          "access-control-allow-credentials",
+          "content-type",
+          "content-length",
+          "etag",
+          "date",
+          "connection",
+          "keep-alive"
+        ],
+        "status_code": 200
+      },
+      "fix_snippet": "add_header Content-Security-Policy \"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';\";",
+      "reproduce_command": "curl -I http://localhost:3001/",
+      "reproduce_seed": "b22f376b",
+      "priority_score": 80,
+      "owasp_category": "A05 - Security Misconfiguration",
+      "scanner": "HeaderScanner",
+      "timestamp": "2025-09-27T17:37:59.193596"
+    },
+    {
+      "id": "06e7e6d7",
+      "run_id": "099e7b71",
+      "category": "missing_headers",
+      "severity": "high",
+      "title": "Missing X Frame Options",
+      "description": "Missing X-Frame-Options header (clickjacking protection)",
+      "evidence": {
+        "url": "http://localhost:3001/",
+        "missing_header": "x-frame-options",
+        "all_headers": [
+          "x-powered-by",
+          "access-control-allow-origin",
+          "access-control-allow-credentials",
+          "content-type",
+          "content-length",
+          "etag",
+          "date",
+          "connection",
+          "keep-alive"
+        ],
+        "status_code": 200
+      },
+      "fix_snippet": "add_header X-Frame-Options \"DENY\";",
+      "reproduce_command": "curl -I http://localhost:3001/",
+      "reproduce_seed": "c3343dde",
+      "priority_score": 80,
+      "owasp_category": "A05 - Security Misconfiguration",
+      "scanner": "HeaderScanner",
+      "timestamp": "2025-09-27T17:37:59.193615"
+    },
+    {
+      "id": "fe90ac5c",
+      "run_id": "099e7b71",
+      "category": "missing_headers",
+      "severity": "medium",
+      "title": "Missing Strict Transport Security",
+      "description": "Missing Strict-Transport-Security header",
+      "evidence": {
+        "url": "http://localhost:3001/",
+        "missing_header": "strict-transport-security",
+        "all_headers": [
+          "x-powered-by",
+          "access-control-allow-origin",
+          "access-control-allow-credentials",
+          "content-type",
+          "content-length",
+          "etag",
+          "date",
+          "connection",
+          "keep-alive"
+        ],
+        "status_code": 200
+      },
+      "fix_snippet": "add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\";",
+      "reproduce_command": "curl -I http://localhost:3001/",
+      "reproduce_seed": "f8344fb3",
+      "priority_score": 60,
+      "owasp_category": "A05 - Security Misconfiguration",
+      "scanner": "HeaderScanner",
+      "timestamp": "2025-09-27T17:37:59.193627"
+    },
+    {
+      "id": "81e6bc4b",
+      "run_id": "099e7b71",
+      "category": "missing_headers",
+      "severity": "medium",
+      "title": "Missing X Content Type Options",
+      "description": "Missing X-Content-Type-Options header",
+      "evidence": {
+        "url": "http://localhost:3001/",
+        "missing_header": "x-content-type-options",
+        "all_headers": [
+          "x-powered-by",
+          "access-control-allow-origin",
+          "access-control-allow-credentials",
+          "content-type",
+          "content-length",
+          "etag",
+          "date",
+          "connection",
+          "keep-alive"
+        ],
+        "status_code": 200
+      },
+      "fix_snippet": "add_header X-Content-Type-Options \"nosniff\";",
+      "reproduce_command": "curl -I http://localhost:3001/",
+      "reproduce_seed": "0d9df545",
+      "priority_score": 60,
+      "owasp_category": "A05 - Security Misconfiguration",
+      "scanner": "HeaderScanner",
+      "timestamp": "2025-09-27T17:37:59.193637"
+    },
+    {
+      "id": "46df1891",
+      "run_id": "099e7b71",
+      "category": "missing_headers",
+      "severity": "low",
+      "title": "Missing Referrer Policy",
+      "description": "Missing Referrer-Policy header",
+      "evidence": {
+        "url": "http://localhost:3001/",
+        "missing_header": "referrer-policy",
+        "all_headers": [
+          "x-powered-by",
+          "access-control-allow-origin",
+          "access-control-allow-credentials",
+          "content-type",
+          "content-length",
+          "etag",
+          "date",
+          "connection",
+          "keep-alive"
+        ],
+        "status_code": 200
+      },
+      "fix_snippet": "add_header Referrer-Policy \"strict-origin-when-cross-origin\";",
+      "reproduce_command": "curl -I http://localhost:3001/",
+      "reproduce_seed": "4e8b91ea",
+      "priority_score": 40,
+      "owasp_category": "A05 - Security Misconfiguration",
+      "scanner": "HeaderScanner",
+      "timestamp": "2025-09-27T17:37:59.193659"
+    },
+    {
+      "id": "121e6762",
+      "run_id": "099e7b71",
+      "category": "missing_headers",
+      "severity": "low",
+      "title": "Missing Permissions Policy",
+      "description": "Missing Permissions-Policy header",
+      "evidence": {
+        "url": "http://localhost:3001/",
+        "missing_header": "permissions-policy",
+        "all_headers": [
+          "x-powered-by",
+          "access-control-allow-origin",
+          "access-control-allow-credentials",
+          "content-type",
+          "content-length",
+          "etag",
+          "date",
+          "connection",
+          "keep-alive"
+        ],
+        "status_code": 200
+      },
+      "fix_snippet": "add_header Permissions-Policy \"geolocation=(), microphone=(), camera=()\";",
+      "reproduce_command": "curl -I http://localhost:3001/",
+      "reproduce_seed": "2c4c6b6c",
+      "priority_score": 40,
+      "owasp_category": "A05 - Security Misconfiguration",
+      "scanner": "HeaderScanner",
+      "timestamp": "2025-09-27T17:37:59.193667"
+    },
+    {
+      "id": "e26a5bc6",
+      "run_id": "099e7b71",
+      "category": "missing_headers",
+      "severity": "high",
+      "title": "Missing Content Security Policy",
+      "description": "Missing Content Security Policy header",
+      "evidence": {
+        "url": "http://localhost:3001/redirect?url=https://google.com",
+        "missing_header": "content-security-policy",
+        "all_headers": [
+          "date",
+          "expires",
+          "cache-control",
+          "content-type",
+          "content-security-policy-report-only",
+          "accept-ch",
+          "p3p",
+          "content-encoding",
+          "server",
+          "x-xss-protection",
+          "x-frame-options",
+          "set-cookie",
+          "alt-svc",
+          "transfer-encoding"
+        ],
+        "status_code": 200
+      },
+      "fix_snippet": "add_header Content-Security-Policy \"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';\";",
+      "reproduce_command": "curl -I http://localhost:3001/redirect?url=https://google.com",
+      "reproduce_seed": "8d5fbf48",
+      "priority_score": 80,
+      "owasp_category": "A05 - Security Misconfiguration",
+      "scanner": "HeaderScanner",
+      "timestamp": "2025-09-27T17:37:59.193896"
+    },
+    {
+      "id": "78859433",
+      "run_id": "099e7b71",
+      "category": "missing_headers",
+      "severity": "medium",
+      "title": "Missing Strict Transport Security",
+      "description": "Missing Strict-Transport-Security header",
+      "evidence": {
+        "url": "http://localhost:3001/redirect?url=https://google.com",
+        "missing_header": "strict-transport-security",
+        "all_headers": [
+          "date",
+          "expires",
+          "cache-control",
+          "content-type",
+          "content-security-policy-report-only",
+          "accept-ch",
+          "p3p",
+          "content-encoding",
+          "server",
+          "x-xss-protection",
+          "x-frame-options",
+          "set-cookie",
+          "alt-svc",
+          "transfer-encoding"
+        ],
+        "status_code": 200
+      },
+      "fix_snippet": "add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\";",
+      "reproduce_command": "curl -I http://localhost:3001/redirect?url=https://google.com",
+      "reproduce_seed": "1100162f",
+      "priority_score": 60,
+      "owasp_category": "A05 - Security Misconfiguration",
+      "scanner": "HeaderScanner",
+      "timestamp": "2025-09-27T17:37:59.193906"
+    },
+    {
+      "id": "c67f9275",
+      "run_id": "099e7b71",
+      "category": "missing_headers",
+      "severity": "medium",
+      "title": "Missing X Content Type Options",
+      "description": "Missing X-Content-Type-Options header",
+      "evidence": {
+        "url": "http://localhost:3001/redirect?url=https://google.com",
+        "missing_header": "x-content-type-options",
+        "all_headers": [
+          "date",
+          "expires",
+          "cache-control",
+          "content-type",
+          "content-security-policy-report-only",
+          "accept-ch",
+          "p3p",
+          "content-encoding",
+          "server",
+          "x-xss-protection",
+          "x-frame-options",
+          "set-cookie",
+          "alt-svc",
+          "transfer-encoding"
+        ],
+        "status_code": 200
+      },
+      "fix_snippet": "add_header X-Content-Type-Options \"nosniff\";",
+      "reproduce_command": "curl -I http://localhost:3001/redirect?url=https://google.com",
+      "reproduce_seed": "f5efd2c7",
+      "priority_score": 60,
+      "owasp_category": "A05 - Security Misconfiguration",
+      "scanner": "HeaderScanner",
+      "timestamp": "2025-09-27T17:37:59.193915"
+    },
+    {
+      "id": "fe1d6f09",
+      "run_id": "099e7b71",
+      "category": "missing_headers",
+      "severity": "low",
+      "title": "Missing Referrer Policy",
+      "description": "Missing Referrer-Policy header",
+      "evidence": {
+        "url": "http://localhost:3001/redirect?url=https://google.com",
+        "missing_header": "referrer-policy",
+        "all_headers": [
+          "date",
+          "expires",
+          "cache-control",
+          "content-type",
+          "content-security-policy-report-only",
+          "accept-ch",
+          "p3p",
+          "content-encoding",
+          "server",
+          "x-xss-protection",
+          "x-frame-options",
+          "set-cookie",
+          "alt-svc",
+          "transfer-encoding"
+        ],
+        "status_code": 200
+      },
+      "fix_snippet": "add_header Referrer-Policy \"strict-origin-when-cross-origin\";",
+      "reproduce_command": "curl -I http://localhost:3001/redirect?url=https://google.com",
+      "reproduce_seed": "94cd2c62",
+      "priority_score": 40,
+      "owasp_category": "A05 - Security Misconfiguration",
+      "scanner": "HeaderScanner",
+      "timestamp": "2025-09-27T17:37:59.193924"
+    },
+    {
+      "id": "03361dac",
+      "run_id": "099e7b71",
+      "category": "missing_headers",
+      "severity": "low",
+      "title": "Missing Permissions Policy",
+      "description": "Missing Permissions-Policy header",
+      "evidence": {
+        "url": "http://localhost:3001/redirect?url=https://google.com",
+        "missing_header": "permissions-policy",
+        "all_headers": [
+          "date",
+          "expires",
+          "cache-control",
+          "content-type",
+          "content-security-policy-report-only",
+          "accept-ch",
+          "p3p",
+          "content-encoding",
+          "server",
+          "x-xss-protection",
+          "x-frame-options",
+          "set-cookie",
+          "alt-svc",
+          "transfer-encoding"
+        ],
+        "status_code": 200
+      },
+      "fix_snippet": "add_header Permissions-Policy \"geolocation=(), microphone=(), camera=()\";",
+      "reproduce_command": "curl -I http://localhost:3001/redirect?url=https://google.com",
+      "reproduce_seed": "12718d34",
+      "priority_score": 40,
+      "owasp_category": "A05 - Security Misconfiguration",
+      "scanner": "HeaderScanner",
+      "timestamp": "2025-09-27T17:37:59.193932"
+    },
+    {
+      "id": "b278f5bf",
+      "run_id": "099e7b71",
+      "category": "insecure_cookies",
+      "severity": "medium",
+      "title": "Insecure Cookie: AEC",
+      "description": "Cookie has security issues: Missing HttpOnly flag, Missing SameSite attribute",
+      "evidence": {
+        "url": "http://localhost:3001/redirect?url=https://google.com",
+        "cookie_name": "AEC",
+        "cookie_attributes": {
+          "secure": true,
+          "httpOnly": false,
+          "sameSite": ""
+        },
+        "issues": [
+          "Missing HttpOnly flag",
+          "Missing SameSite attribute"
+        ]
+      },
+      "fix_snippet": "res.cookie(\"name\", \"value\", {\n  secure: true,\n  httpOnly: true,\n  sameSite: \"strict\"\n});",
+      "reproduce_command": "curl -I http://localhost:3001/redirect?url=https://google.com",
+      "reproduce_seed": "42f2dec7",
+      "priority_score": 60,
+      "owasp_category": "A05 - Security Misconfiguration",
+      "scanner": "HeaderScanner",
+      "timestamp": "2025-09-27T17:37:59.193949"
+    },
+    {
+      "id": "ac045d83",
+      "run_id": "099e7b71",
+      "category": "insecure_cookies",
+      "severity": "medium",
+      "title": "Insecure Cookie: NID",
+      "description": "Cookie has security issues: Missing HttpOnly flag, Missing SameSite attribute",
+      "evidence": {
+        "url": "http://localhost:3001/redirect?url=https://google.com",
+        "cookie_name": "NID",
+        "cookie_attributes": {
+          "secure": false,
+          "httpOnly": false,
+          "sameSite": ""
+        },
+        "issues": [
+          "Missing HttpOnly flag",
+          "Missing SameSite attribute"
+        ]
+      },
+      "fix_snippet": "res.cookie(\"name\", \"value\", {\n  secure: true,\n  httpOnly: true,\n  sameSite: \"strict\"\n});",
+      "reproduce_command": "curl -I http://localhost:3001/redirect?url=https://google.com",
+      "reproduce_seed": "8176d519",
+      "priority_score": 60,
+      "owasp_category": "A05 - Security Misconfiguration",
+      "scanner": "HeaderScanner",
+      "timestamp": "2025-09-27T17:37:59.193959"
+    }
+  ],
+  "summary": {
+    "total_findings": 13,
+    "by_severity": {
+      "critical": 0,
+      "high": 3,
+      "medium": 6,
+      "low": 4
+    },
+    "by_owasp_category": {
+      "A05 - Security Misconfiguration": 13
+    }
+  },
+  "timestamp": "2025-09-27T17:37:59.198207"
+}

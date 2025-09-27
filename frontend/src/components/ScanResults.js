@@ -43,8 +43,9 @@ const ScanResults = () => {
   useEffect(() => {
     if (!runId) return;
 
-    // Fetch initial scan status
+    // Fetch initial scan status and findings
     fetchScanStatus();
+    fetchFindings();
 
     // Set up SSE for real-time updates
     const eventSource = new EventSource(`http://localhost:8000/runs/${runId}/stream`);
@@ -70,7 +71,30 @@ const ScanResults = () => {
     return () => {
       eventSource.close();
     };
-  }, [runId, fetchScanStatus, fetchFindings]);
+
+  }, [runId]);
+
+  const fetchScanStatus = async () => {
+    try {
+      const response = await axios.get(`/runs/${runId}`);
+      setScanStatus(response.data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Failed to fetch scan status:', error);
+      setLoading(false);
+    }
+  };
+
+  const fetchFindings = async () => {
+    try {
+      console.log(`🔍 Fetching findings for run ${runId}`);
+      const response = await axios.get(`/runs/${runId}/findings`);
+      console.log(`✅ Found ${response.data.length} findings:`, response.data.slice(0, 3));
+      setFindings(response.data);
+    } catch (error) {
+      console.error('Failed to fetch findings:', error);
+    }
+  };
 
   const getSeverityColor = (severity) => {
     switch (severity) {

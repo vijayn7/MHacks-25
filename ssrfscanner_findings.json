@@ -1,0 +1,39 @@
+{
+  "run_id": "099e7b71",
+  "scanner": "SSRFScanner",
+  "findings": [
+    {
+      "id": "53c101f9",
+      "run_id": "099e7b71",
+      "category": "ssrf",
+      "severity": "high",
+      "title": "Potential SSRF Parameter: url",
+      "description": "URL parameter \"url\" might be vulnerable to Server-Side Request Forgery.",
+      "evidence": {
+        "url": "http://localhost:3001/redirect?url=https://google.com",
+        "parameter": "url",
+        "ssrf_risk": true
+      },
+      "fix_snippet": "// Prevent SSRF attacks\n// 1. Validate and whitelist URLs\nfunction isValidURL(url) {\n    const allowedDomains = ['example.com', 'api.example.com'];\n    try {\n        const parsed = new URL(url);\n        return allowedDomains.includes(parsed.hostname);\n    } catch {\n        return false;\n    }\n}\n\n// 2. Use allowlist approach\nconst ALLOWED_URLS = [\n    'https://api.example.com/',\n    'https://internal.example.com/'\n];\n\n// 3. Block private IP ranges\nfunction isPrivateIP(hostname) {\n    const privateRanges = [\n        /^10\\./,\n        /^172\\.(1[6-9]|2[0-9]|3[0-1])\\./,\n        /^192\\.168\\./,\n        /^127\\./,\n        /^localhost$/\n    ];\n    return privateRanges.some(range => range.test(hostname));\n}",
+      "reproduce_command": "curl 'http://localhost:3001/redirect?url=https://google.com'",
+      "reproduce_seed": "b8df08e2",
+      "priority_score": 70,
+      "owasp_category": "A10 - Server-Side Request Forgery",
+      "scanner": "SSRFScanner",
+      "timestamp": "2025-09-27T17:37:59.198025"
+    }
+  ],
+  "summary": {
+    "total_findings": 1,
+    "by_severity": {
+      "critical": 0,
+      "high": 1,
+      "medium": 0,
+      "low": 0
+    },
+    "by_owasp_category": {
+      "A10 - Server-Side Request Forgery": 1
+    }
+  },
+  "timestamp": "2025-09-27T17:37:59.200593"
+}
