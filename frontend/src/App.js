@@ -57,36 +57,18 @@ function App() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-background relative overflow-hidden">
+      <div className="min-h-screen bg-background relative overflow-hidden" style={{ 
+        transform: 'translateZ(0)', 
+        WebkitTransform: 'translateZ(0)',
+        willChange: 'scroll-position'
+      }}>
         {/* Background Grid */}
         <div className="fixed inset-0 swarm-grid pointer-events-none" />
 
-        {/* Animated Background Elements */}
+        {/* Static Background Elements */}
         <div className="fixed inset-0 pointer-events-none">
-          <motion.div
-            className="absolute top-20 left-20 w-64 h-64 bg-primary/5 rounded-full blur-3xl"
-            animate={{
-              scale: [1, 1.2, 1],
-              opacity: [0.3, 0.5, 0.3],
-            }}
-            transition={{
-              duration: 8,
-              repeat: Number.POSITIVE_INFINITY,
-              ease: "easeInOut",
-            }}
-          />
-          <motion.div
-            className="absolute bottom-20 right-20 w-96 h-96 bg-primary/3 rounded-full blur-3xl"
-            animate={{
-              scale: [1.2, 1, 1.2],
-              opacity: [0.2, 0.4, 0.2],
-            }}
-            transition={{
-              duration: 10,
-              repeat: Number.POSITIVE_INFINITY,
-              ease: "easeInOut",
-            }}
-          />
+          <div className="absolute top-20 left-20 w-48 h-48 bg-primary/2 rounded-full blur-xl" />
+          <div className="absolute bottom-20 right-20 w-64 h-64 bg-primary/1 rounded-full blur-xl" />
         </div>
 
         <motion.header
