@@ -66,10 +66,20 @@ async def init_database():
     """Initialize MongoDB connection and database"""
     global db_client
 
-    print(f"🔌 Connecting to MongoDB at {MONGODB_URL}")
+    # Modify MongoDB URL to include SSL parameters for certificate issues
+    mongodb_url = MONGODB_URL
+    if "&tlsAllowInvalidCertificates=true" not in mongodb_url:
+        mongodb_url += "&tlsAllowInvalidCertificates=true"
+    
+    print(f"🔌 Connecting to MongoDB at {mongodb_url[:50]}...")
 
     # Create Motor client
-    db_client = AsyncIOMotorClient(MONGODB_URL)
+    db_client = AsyncIOMotorClient(
+        mongodb_url,
+        serverSelectionTimeoutMS=5000,
+        connectTimeoutMS=5000,
+        socketTimeoutMS=5000
+    )
 
     # Test connection
     try:

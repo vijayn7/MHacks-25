@@ -41,6 +41,6 @@
   },
   "proxy": "http://localhost:8000",
   "devDependencies": {
-    "@craco/craco": "^7.1.0"
+    "@craco/craco": "^5.9.0"
   }
 }
