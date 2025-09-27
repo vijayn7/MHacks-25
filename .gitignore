@@ -7,6 +7,9 @@
 .env.production
 .env.development
 
+# Ignore Report files
+*.json
+
 # Database credentials and MongoDB connection strings
 backend/.env
 **/config/database.yml
