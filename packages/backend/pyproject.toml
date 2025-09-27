@@ -1,0 +1,29 @@
+[project]
+name = "aegisflow-backend"
+version = "0.1.0"
+description = "FastAPI backend for AegisFlow"
+authors = [{name = "MHacks Team"}]
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "sqlmodel",
+    "pydantic",
+    "alembic",
+    "jinja2",
+    "python-multipart",
+    "aiofiles",
+    "weasyprint",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "httpx",
+    "anyio",
+    "ruff",
+]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
