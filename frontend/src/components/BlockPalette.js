@@ -76,16 +76,29 @@ const BlockPalette = ({ onAddBlock, isCollapsed, onToggleCollapse, usedBlocks = 
     event.dataTransfer.effectAllowed = 'copy'
     event.dataTransfer.setData('application/json', JSON.stringify(blockType))
     
-    // Create a custom drag image
+    // Create a custom drag image with enhanced styling
     const dragImage = event.target.cloneNode(true)
-    dragImage.style.transform = 'rotate(5deg)'
-    dragImage.style.opacity = '0.8'
+    dragImage.style.transform = 'rotate(8deg) scale(1.1)'
+    dragImage.style.opacity = '0.9'
+    dragImage.style.filter = 'drop-shadow(0 10px 20px rgba(0,0,0,0.3))'
+    dragImage.style.border = '2px solid rgba(59, 130, 246, 0.8)'
+    dragImage.style.borderRadius = '12px'
+    dragImage.style.backgroundColor = 'rgba(255, 255, 255, 0.95)'
+    dragImage.style.padding = '8px'
+    dragImage.style.zIndex = '1000'
+    dragImage.style.position = 'absolute'
+    dragImage.style.pointerEvents = 'none'
+    dragImage.style.left = '-1000px'
+    dragImage.style.top = '-1000px'
+    
     document.body.appendChild(dragImage)
     event.dataTransfer.setDragImage(dragImage, 64, 64)
     
     // Clean up the drag image after a short delay
     setTimeout(() => {
-      document.body.removeChild(dragImage)
+      if (document.body.contains(dragImage)) {
+        document.body.removeChild(dragImage)
+      }
     }, 0)
   }
 
@@ -154,18 +167,40 @@ const BlockPalette = ({ onAddBlock, isCollapsed, onToggleCollapse, usedBlocks = 
                       isBlockUsed(blockType.type) ? blockType.usedColor : blockType.color
                     } hover:scale-105 transition-all duration-200 ${
                       isBlockUsed(blockType.type) ? 'cursor-not-allowed' : ''
-                    } group shadow-lg hover:shadow-xl`}
-                    style={{ userSelect: 'none' }}
+                    } group shadow-lg hover:shadow-xl ${
+                      draggedBlock?.type === blockType.type ? 'ring-2 ring-blue-400 shadow-blue-400/50' : ''
+                    }`}
+                    style={{ 
+                      userSelect: 'none',
+                      transform: draggedBlock?.type === blockType.type ? 'rotate(2deg)' : 'rotate(0deg)',
+                      filter: draggedBlock?.type === blockType.type ? 'drop-shadow(0 5px 15px rgba(0,0,0,0.2))' : 'none'
+                    }}
                     draggable={!isBlockUsed(blockType.type)}
                     onDragStart={(e) => !isBlockUsed(blockType.type) && handleDragStart(blockType, e)}
                     onDragEnd={handleDragEnd}
                     onMouseEnter={() => setShowConfigButton(blockType.type)}
                     onMouseLeave={() => setShowConfigButton(null)}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    whileHover={{ scale: isBlockUsed(blockType.type) ? 1 : 1.05 }}
-                    whileTap={{ scale: isBlockUsed(blockType.type) ? 1 : 0.95 }}
+                    initial={{ opacity: 0, y: 20, rotate: -10 }}
+                    animate={{ 
+                      opacity: 1, 
+                      y: 0, 
+                      rotate: draggedBlock?.type === blockType.type ? 2 : 0
+                    }}
+                    transition={{ 
+                      delay: index * 0.1,
+                      type: "spring",
+                      stiffness: 100,
+                      damping: 10
+                    }}
+                    whileHover={{ 
+                      scale: isBlockUsed(blockType.type) ? 1 : 1.08,
+                      rotate: isBlockUsed(blockType.type) ? 0 : 2,
+                      y: isBlockUsed(blockType.type) ? 0 : -2
+                    }}
+                    whileTap={{ 
+                      scale: isBlockUsed(blockType.type) ? 1 : 0.95,
+                      rotate: isBlockUsed(blockType.type) ? 0 : -1
+                    }}
                     onClick={() => !isBlockUsed(blockType.type) && onAddBlock(blockType)}
                   >
                     <div className="p-4 h-full flex flex-col justify-center items-center text-center relative" style={{ userSelect: 'none' }}>

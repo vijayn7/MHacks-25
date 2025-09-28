@@ -60,6 +60,13 @@ const BlockCanvas = ({
   const [dragOverCanvas, setDragOverCanvas] = useState(false)
   const [showDeleteAllModal, setShowDeleteAllModal] = useState(false)
   const [dontShowAgain, setDontShowAgain] = useState(false)
+  const [dragVelocity, setDragVelocity] = useState({ x: 0, y: 0 })
+  const [lastDragPos, setLastDragPos] = useState({ x: 0, y: 0 })
+  const [dragStartTime, setDragStartTime] = useState(0)
+  const [snapZones, setSnapZones] = useState([])
+  const [isSnapping, setIsSnapping] = useState(false)
+  const [dragShadow, setDragShadow] = useState(null)
+  const [connectionPreview, setConnectionPreview] = useState(null)
 
   // Handle block drag start
   const handleBlockDragStart = useCallback((blockId, event) => {
@@ -78,6 +85,9 @@ const BlockCanvas = ({
       y: mouseY - block.y
     })
     setDragStartPos({ x: mouseX, y: mouseY })
+    setLastDragPos({ x: mouseX, y: mouseY })
+    setDragVelocity({ x: 0, y: 0 })
+    setDragStartTime(Date.now())
     setIsDragging(true)
     setDraggedBlockId(blockId)
     setDeleteZoneActive(true)
@@ -85,6 +95,75 @@ const BlockCanvas = ({
     setShowDeleteButton(null)
     setMagneticSnap(null)
     setIsMouseDown(true)
+    setIsSnapping(false)
+    
+    // Create drag shadow
+    setDragShadow({
+      x: block.x,
+      y: block.y,
+      type: block.type,
+      opacity: 0.3
+    })
+    
+    // Generate snap zones for better alignment
+    generateSnapZones(block)
+  }, [blocks])
+
+  // Generate snap zones for better alignment
+  const generateSnapZones = useCallback((currentBlock) => {
+    const blockSize = 128
+    const gridSize = 20
+    const zones = []
+    
+    // Grid snap zones
+    for (let x = 0; x <= 800; x += gridSize) {
+      for (let y = 0; y <= 600; y += gridSize) {
+        zones.push({
+          type: 'grid',
+          x,
+          y,
+          strength: 0.3,
+          priority: 1
+        })
+      }
+    }
+    
+    // Block alignment zones
+    blocks.forEach(block => {
+      if (block.id === currentBlock.id) return
+      
+      // Horizontal alignment
+      zones.push({
+        type: 'horizontal',
+        x: block.x,
+        y: currentBlock.y,
+        strength: 0.8,
+        priority: 2,
+        targetBlock: block.id
+      })
+      
+      // Vertical alignment
+      zones.push({
+        type: 'vertical',
+        x: currentBlock.x,
+        y: block.y,
+        strength: 0.8,
+        priority: 2,
+        targetBlock: block.id
+      })
+      
+      // Center alignment
+      zones.push({
+        type: 'center',
+        x: block.x,
+        y: block.y,
+        strength: 0.6,
+        priority: 1,
+        targetBlock: block.id
+      })
+    })
+    
+    setSnapZones(zones)
   }, [blocks])
 
   // Handle mouse move for smooth dragging
@@ -96,84 +175,142 @@ const BlockCanvas = ({
     const mouseX = event.clientX - rect.left
     const mouseY = event.clientY - rect.top
     
+    // Calculate velocity for momentum
+    const currentTime = Date.now()
+    const deltaTime = currentTime - dragStartTime
+    if (deltaTime > 0) {
+      const velocityX = (mouseX - lastDragPos.x) / (deltaTime / 1000)
+      const velocityY = (mouseY - lastDragPos.y) / (deltaTime / 1000)
+      setDragVelocity({ x: velocityX, y: velocityY })
+    }
+    setLastDragPos({ x: mouseX, y: mouseY })
+    
     let newX = mouseX - dragOffset.x
     let newY = mouseY - dragOffset.y
 
-    // Smooth movement without grid snapping during drag
-    // Only apply grid snapping when not near other blocks
-    
-    // Magnetic snapping to other blocks (strong and responsive)
+    // Enhanced snapping system
     const blockSize = 128
-    const magneticThreshold = 50  // Increased for more responsive snapping
-    const snapThreshold = 15      // Increased for easier snapping
+    const snapThreshold = 25
+    const magneticThreshold = 60
     const currentBlock = blocks.find(b => b.id === draggedBlockId)
     
     if (currentBlock) {
-      let magneticTarget = null
+      let bestSnap = null
       let minDistance = Infinity
+      
+      // Check all snap zones
+      snapZones.forEach(zone => {
+        let snapX = newX
+        let snapY = newY
+        let distance = 0
+        
+        switch (zone.type) {
+          case 'grid':
+            snapX = zone.x
+            snapY = zone.y
+            distance = Math.sqrt(Math.pow(newX - zone.x, 2) + Math.pow(newY - zone.y, 2))
+            break
+          case 'horizontal':
+            snapX = zone.x
+            distance = Math.abs(newX - zone.x)
+            break
+          case 'vertical':
+            snapY = zone.y
+            distance = Math.abs(newY - zone.y)
+            break
+          case 'center':
+            snapX = zone.x
+            snapY = zone.y
+            distance = Math.sqrt(Math.pow(newX - zone.x, 2) + Math.pow(newY - zone.y, 2))
+            break
+        }
+        
+        // Check if this snap is better
+        if (distance < snapThreshold && distance < minDistance) {
+          minDistance = distance
+          bestSnap = {
+            x: snapX,
+            y: snapY,
+            type: zone.type,
+            strength: zone.strength,
+            priority: zone.priority,
+            targetBlock: zone.targetBlock
+          }
+        }
+      })
+      
+      // Apply snapping with smooth interpolation
+      if (bestSnap) {
+        const snapStrength = bestSnap.strength * (1 - minDistance / snapThreshold)
+        newX = newX + (bestSnap.x - newX) * snapStrength
+        newY = newY + (bestSnap.y - newY) * snapStrength
+        setIsSnapping(true)
+        
+        // Update magnetic snap for visual feedback
+        if (bestSnap.targetBlock) {
+          setMagneticSnap({ 
+            blockId: draggedBlockId, 
+            targetBlock: bestSnap.targetBlock, 
+            connection: bestSnap.type 
+          })
+        }
+      } else {
+        setIsSnapping(false)
+        setMagneticSnap(null)
+      }
+      
+      // Enhanced magnetic connection snapping
+      let connectionSnap = null
+      let minConnectionDistance = Infinity
       
       for (const otherBlock of blocks) {
         if (otherBlock.id === draggedBlockId) continue
         
-        // Calculate distances to connection points with better precision
-        const distances = {
-          rightToLeft: Math.sqrt(Math.pow(otherBlock.x - blockSize - newX, 2) + Math.pow(otherBlock.y - newY, 2)),
-          leftToRight: Math.sqrt(Math.pow(otherBlock.x + blockSize - newX, 2) + Math.pow(otherBlock.y - newY, 2)),
-          bottomToTop: Math.sqrt(Math.pow(otherBlock.y - blockSize - newY, 2) + Math.pow(otherBlock.x - newX, 2)),
-          topToBottom: Math.sqrt(Math.pow(otherBlock.y + blockSize - newY, 2) + Math.pow(otherBlock.x - newX, 2))
-        }
+        const connectionPoints = [
+          { x: otherBlock.x - blockSize, y: otherBlock.y, type: 'rightToLeft' },
+          { x: otherBlock.x + blockSize, y: otherBlock.y, type: 'leftToRight' },
+          { x: otherBlock.x, y: otherBlock.y - blockSize, type: 'bottomToTop' },
+          { x: otherBlock.x, y: otherBlock.y + blockSize, type: 'topToBottom' }
+        ]
         
-        // Check for magnetic attraction
-        for (const [connection, distance] of Object.entries(distances)) {
-          if (distance < magneticThreshold && distance < minDistance) {
-            minDistance = distance
-            magneticTarget = { block: otherBlock, connection, distance }
+        connectionPoints.forEach(point => {
+          const distance = Math.sqrt(Math.pow(newX - point.x, 2) + Math.pow(newY - point.y, 2))
+          if (distance < magneticThreshold && distance < minConnectionDistance) {
+            minConnectionDistance = distance
+            connectionSnap = { block: otherBlock, ...point, distance }
           }
-        }
+        })
       }
       
-      // Apply magnetic snapping with smooth transition
-      if (magneticTarget && magneticTarget.distance < snapThreshold) {
-        const { block: otherBlock, connection } = magneticTarget
-        
-        switch (connection) {
-          case 'rightToLeft':
-            newX = otherBlock.x - blockSize
-            newY = otherBlock.y
-            break
-          case 'leftToRight':
-            newX = otherBlock.x + blockSize
-            newY = otherBlock.y
-            break
-          case 'bottomToTop':
-            newX = otherBlock.x
-            newY = otherBlock.y - blockSize
-            break
-          case 'topToBottom':
-            newX = otherBlock.x
-            newY = otherBlock.y + blockSize
-            break
-        }
-        setMagneticSnap({ blockId: draggedBlockId, targetBlock: otherBlock.id, connection })
-      } else {
-        setMagneticSnap(null)
-        // Apply light grid snapping only when not magnetically attracted
-        const gridSize = 20
-        newX = Math.round(newX / gridSize) * gridSize
-        newY = Math.round(newY / gridSize) * gridSize
+      // Apply connection snapping
+      if (connectionSnap && connectionSnap.distance < snapThreshold) {
+        newX = connectionSnap.x
+        newY = connectionSnap.y
+        setMagneticSnap({ 
+          blockId: draggedBlockId, 
+          targetBlock: connectionSnap.block.id, 
+          connection: connectionSnap.type 
+        })
+        setIsSnapping(true)
       }
     }
 
-    // Keep within canvas bounds
-    newX = Math.max(0, Math.min(newX, 800))
-    newY = Math.max(0, Math.min(newY, 600))
+    // Apply physics constraints
+    const canvasWidth = 800
+    const canvasHeight = 600
+    newX = Math.max(0, Math.min(newX, canvasWidth - blockSize))
+    newY = Math.max(0, Math.min(newY, canvasHeight - blockSize))
 
+    // Update drag shadow
+    setDragShadow(prev => prev ? { ...prev, x: newX, y: newY } : null)
+
+    // Update block position with smooth animation
     setBlocks(prev => prev.map(block => 
       block.id === draggedBlockId 
         ? { ...block, x: newX, y: newY }
         : block
     ))
-  }, [isDragging, dragOffset, setBlocks, blocks, draggedBlockId])
+  }, [isDragging, dragOffset, setBlocks, blocks, draggedBlockId, snapZones, lastDragPos, dragStartTime])
 
   // Handle mouse up
   const handleMouseUp = useCallback(() => {
@@ -195,13 +332,36 @@ const BlockCanvas = ({
 
   // Handle block drag end
   const handleBlockDragEnd = useCallback((blockId) => {
+    // Apply momentum if velocity is high enough
+    const momentumThreshold = 0.5
+    if (Math.abs(dragVelocity.x) > momentumThreshold || Math.abs(dragVelocity.y) > momentumThreshold) {
+      const currentBlock = blocks.find(b => b.id === blockId)
+      if (currentBlock) {
+        const momentumFactor = 0.3
+        const newX = Math.max(0, Math.min(800 - 128, currentBlock.x + dragVelocity.x * momentumFactor))
+        const newY = Math.max(0, Math.min(600 - 128, currentBlock.y + dragVelocity.y * momentumFactor))
+        
+        setBlocks(prev => prev.map(block => 
+          block.id === blockId 
+            ? { ...block, x: newX, y: newY }
+            : block
+        ))
+      }
+    }
+    
+    // Cleanup
     setIsDragging(false)
     setDraggedBlockId(null)
     setDeleteZoneActive(false)
     setMagneticSnap(null)
     setShowConfigButton(null)
     setShowDeleteButton(null)
-  }, [])
+    setIsSnapping(false)
+    setDragShadow(null)
+    setSnapZones([])
+    setDragVelocity({ x: 0, y: 0 })
+    setConnectionPreview(null)
+  }, [blocks, dragVelocity, setBlocks])
 
   // Add global mouse event listeners
   useEffect(() => {
@@ -623,17 +783,76 @@ const BlockCanvas = ({
           })}
         </svg>
 
+        {/* Drag Shadow */}
+        {dragShadow && (
+          <motion.div
+            className={`absolute w-32 h-32 rounded-xl border-2 ${getBlockColor(dragShadow.type)} opacity-30`}
+            style={{ 
+              left: dragShadow.x, 
+              top: dragShadow.y,
+              zIndex: 1,
+              filter: 'blur(2px)',
+              transform: 'scale(0.95)'
+            }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.3 }}
+            exit={{ opacity: 0 }}
+          />
+        )}
+
+        {/* Snap Zone Indicators */}
+        {isDragging && snapZones.map((zone, index) => {
+          if (zone.type === 'grid') return null // Skip grid zones for performance
+          
+          return (
+            <motion.div
+              key={index}
+              className={`absolute w-2 h-2 rounded-full ${
+                zone.type === 'horizontal' ? 'bg-blue-400' :
+                zone.type === 'vertical' ? 'bg-green-400' :
+                zone.type === 'center' ? 'bg-purple-400' : 'bg-gray-400'
+              } opacity-60`}
+              style={{ 
+                left: zone.x - 4, 
+                top: zone.y - 4,
+                zIndex: 5
+              }}
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 0.6 }}
+              exit={{ scale: 0, opacity: 0 }}
+            />
+          )
+        })}
+
+        {/* Connection Preview */}
+        {connectionPreview && (
+          <svg className="absolute inset-0 pointer-events-none" style={{ zIndex: 3 }}>
+            <motion.path
+              d={connectionPreview.path}
+              stroke="rgba(59, 130, 246, 0.8)"
+              strokeWidth="3"
+              fill="none"
+              strokeDasharray="8,4"
+              initial={{ pathLength: 0 }}
+              animate={{ pathLength: 1 }}
+              transition={{ duration: 0.3 }}
+            />
+          </svg>
+        )}
+
         {/* Blocks */}
         <AnimatePresence>
           {blocks.map((block) => (
             <motion.div
               key={block.id}
               className={`absolute w-32 h-32 rounded-xl border-2 cursor-move select-none ${getBlockColor(block.type)} ${
-                selectedBlock?.id === block.id ? 'ring-2 ring-white' : ''
+                selectedBlock?.id === block.id ? 'ring-2 ring-white shadow-lg' : ''
               } ${
-                draggedBlockId === block.id ? 'opacity-80 scale-105' : ''
+                draggedBlockId === block.id ? 'opacity-90 scale-105 shadow-2xl' : ''
               } ${
-                magneticSnap?.targetBlock === block.id ? 'ring-2 ring-yellow-400' : ''
+                magneticSnap?.targetBlock === block.id ? 'ring-2 ring-yellow-400 shadow-yellow-400/50' : ''
+              } ${
+                isSnapping ? 'ring-2 ring-blue-400 shadow-blue-400/50' : ''
               } group transition-all duration-200`}
               style={{ 
                 left: block.x, 
@@ -642,16 +861,21 @@ const BlockCanvas = ({
                 userSelect: 'none',
                 WebkitUserSelect: 'none',
                 MozUserSelect: 'none',
-                msUserSelect: 'none'
+                msUserSelect: 'none',
+                transform: draggedBlockId === block.id ? 'rotate(2deg)' : 'rotate(0deg)',
+                filter: draggedBlockId === block.id ? 'drop-shadow(0 10px 20px rgba(0,0,0,0.3))' : 'none'
               }}
-              initial={{ scale: 0, opacity: 0 }}
+              initial={{ scale: 0, opacity: 0, rotate: -180 }}
               animate={{ 
                 scale: draggedBlockId === block.id ? 1.05 : 1, 
                 opacity: 1,
-                rotate: 0
+                rotate: draggedBlockId === block.id ? 2 : 0
               }}
-              exit={{ scale: 0, opacity: 0 }}
-              whileHover={{ scale: draggedBlockId === block.id ? 1.05 : 1.05 }}
+              exit={{ scale: 0, opacity: 0, rotate: 180 }}
+              whileHover={{ 
+                scale: draggedBlockId === block.id ? 1.05 : 1.08,
+                rotate: draggedBlockId === block.id ? 2 : 1
+              }}
               whileTap={{ scale: 0.95 }}
               onMouseDown={(e) => handleBlockDragStart(block.id, e)}
               onMouseEnter={() => handleBlockHover(block.id, true)}
