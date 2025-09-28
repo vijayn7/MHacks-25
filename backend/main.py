@@ -193,11 +193,13 @@ async def stream_scan_events(run_id: str):
                     yield f"data: {json.dumps(event)}\n\n"
                 last_event_count = len(active_connections[run_id])
 
-            # Check if scan is complete
+            # Check if scan is complete (but keep connection open for dynamic scans)
             updated_scan = await get_scan_run(run_id)
             if updated_scan and updated_scan.status in [ScanStatus.COMPLETED, ScanStatus.FAILED]:
-                yield f"data: {json.dumps({'event_type': 'scan_completed', 'data': {'status': updated_scan.status}, 'timestamp': datetime.now().isoformat()})}\n\n"
-                break
+                # Only close if no dynamic scan is running
+                if not updated_scan.get('dynamic_analysis_running', False):
+                    yield f"data: {json.dumps({'event_type': 'scan_completed', 'data': {'status': updated_scan.status}, 'timestamp': datetime.now().isoformat()})}\n\n"
+                    break
 
             await asyncio.sleep(1)
 
@@ -529,6 +531,9 @@ async def run_dynamic_scan(run_id: str, codebase_path: str):
         if not os.path.exists(codebase_path):
             raise HTTPException(status_code=400, detail="Codebase path does not exist")
         
+        # Mark dynamic analysis as running
+        await update_scan_run(run_id, {"dynamic_analysis_running": True})
+        
         # Send dynamic analysis status
         if run_id in active_connections:
             active_connections[run_id].append({
@@ -581,7 +586,8 @@ async def run_dynamic_scan(run_id: str, codebase_path: str):
         # Update scan run with dynamic analysis results
         await update_scan_run(run_id, {
             "dynamic_analysis": dynamic_results,
-            "ai_generated_findings": len(dynamic_findings)
+            "ai_generated_findings": len(dynamic_findings),
+            "dynamic_analysis_running": False
         })
         
         # Send completion status
@@ -608,6 +614,8 @@ async def run_dynamic_scan(run_id: str, codebase_path: str):
         
     except Exception as e:
         print(f"❌ Dynamic scan error: {str(e)}")
+        # Mark dynamic analysis as completed even on error
+        await update_scan_run(run_id, {"dynamic_analysis_running": False})
         if run_id in active_connections:
             active_connections[run_id].append({
                 "event_type": "dynamic_scan_error",

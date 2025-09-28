@@ -108,26 +108,32 @@ const ScanResults = ({ currentScan }) => {
 
     eventSource.onmessage = async (event) => {
       const data = JSON.parse(event.data);
+      console.log('📡 SSE Event received:', data.event_type, data.data);
       setEvents(prev => [...prev, data]);
 
       if (data.event_type === 'status_update') {
         setScanStatus(prev => ({ ...prev, status: data.data.status }));
       } else if (data.event_type === 'finding_discovered') {
+        console.log('🔍 New finding discovered:', data.data);
         // Check if it's an AI-generated finding
         if (data.data.ai_generated) {
           setNewAIFindings(prev => prev + 1);
         }
-        fetchFindings(); // Refresh findings when new one is discovered
+        // Refresh findings to get the latest data
+        await fetchFindings();
       } else if (data.event_type === 'scan_completed') {
+        console.log('✅ Scan completed');
         fetchScanStatus();
-        fetchFindings();
+        await fetchFindings();
       } else if (data.event_type === 'dynamic_scan_completed') {
+        console.log('🤖 Dynamic scan completed');
         setDynamicScanning(false);
         setNewAIFindings(0); // Reset counter
-        // Auto-refresh findings to show AI-generated ones
+        // Refresh findings to show AI-generated ones
         await fetchFindings();
         console.log(`✅ AI analysis completed! Found ${data.data.ai_generated_findings} new findings.`);
       } else if (data.event_type === 'dynamic_scan_error') {
+        console.log('❌ Dynamic scan error:', data.data.error);
         setDynamicScanning(false);
         setNewAIFindings(0); // Reset counter
         alert('AI-powered analysis failed: ' + data.data.error);
@@ -142,7 +148,7 @@ const ScanResults = ({ currentScan }) => {
       eventSource.close();
     };
 
-  }, [runId, fetchScanStatus, fetchFindings]);
+  }, [runId]);
 
   const getSeverityColor = (severity) => {
     switch (severity) {
