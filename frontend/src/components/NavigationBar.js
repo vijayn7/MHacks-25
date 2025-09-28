@@ -23,6 +23,7 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
     { name: "AI Assistant", path: "/agentic" },
     { name: "Blocks", path: "/blocks" },
     { name: "Results", path: "/runs" },
+    { name: "GitHub Auditor", path: "/github-auditor" },
   ]
 
   const isActive = (path) => {
@@ -37,6 +38,9 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
     }
     if (path === "/agentic") {
       return location.pathname === "/agentic"
+    }
+    if (path === "/github-auditor") {
+      return location.pathname === "/github-auditor"
     }
     return location.pathname === path
   }
@@ -247,6 +251,8 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
                           if (isAuthenticated && !authLoading) {
                             setIsMenuOpen(false)
                           }
+                        } else if (item.name === "GitHub Auditor") {
+                          setIsMenuOpen(false)
                         } else {
                           setIsMenuOpen(false)
                         }

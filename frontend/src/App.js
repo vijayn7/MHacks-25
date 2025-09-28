@@ -7,6 +7,7 @@ import ScanDashboard from "./components/ScanDashboard"
 import ScanResults from "./components/ScanResults"
 import BuildScreen from "./components/BuildScreen"
 import AgenticChat from "./components/AgenticChat"
+import GitHubAuditor from "./components/GitHubAuditor"
 import ConsentModal from "./components/ConsentModal"
 import NavigationBar from "./components/NavigationBar"
 import ProtectedRoute from "./components/ProtectedRoute"
@@ -196,6 +197,22 @@ const AppRoutes = () => {
                     className="h-screen"
                   >
                     <AgenticChat onStartTestGeneration={handleStartScan} />
+                  </motion.div>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/github-auditor"
+              element={
+                <ProtectedRoute>
+                  <motion.div
+                    key="github-auditor"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.5 }}
+                  >
+                    <GitHubAuditor />
                   </motion.div>
                 </ProtectedRoute>
               }
