@@ -12,20 +12,15 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const isAuthenticated = Boolean(user)
   const canStartScan = isAuthenticated && !authLoading
-  const isDashboardActive = location.pathname === "/"
-  const isResultsActive =
-    location.pathname.startsWith("/scan/") || location.pathname === "/runs"
   const resultsDisabled = !isAuthenticated || authLoading
 
   useEffect(() => {
     setIsMenuOpen(false)
   }, [location.pathname])
-  // Check if we're currently on a scan results page
-  const isOnScanResults = location.pathname.startsWith("/scan/")
 
   const navItems = [
     { name: "Dashboard", path: "/" },
-    { name: "Results", path: "/results" },
+    { name: "Results", path: "/runs" },
     { name: "Build", path: "/build" }
   ]
 
@@ -33,8 +28,8 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
     if (path === "/") {
       return location.pathname === "/"
     }
-    if (path === "/results") {
-      return location.pathname === "/results" || location.pathname.startsWith("/scan/")
+    if (path === "/runs") {
+      return location.pathname === "/runs" || location.pathname.startsWith("/scan/")
     }
     if (path === "/build") {
       return location.pathname === "/build"
@@ -119,54 +114,17 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
 
             {/* Navigation Links */}
             <nav className="hidden md:flex items-center space-x-8">
-              <Link
-                to="/"
-                className={`relative text-sm font-medium transition-colors duration-200 ${
-                  !isAuthenticated || authLoading
-                    ? "text-foreground/30 cursor-not-allowed"
-                    : isDashboardActive
-                    ? "text-primary"
-                    : "text-foreground/70 hover:text-foreground"
-                }`}
-              >
-                Dashboard
-                {isDashboardActive && isAuthenticated && !authLoading && (
-                  <motion.div
-                    className="absolute -bottom-1 left-0 right-0 h-0.5 bg-primary"
-                    layoutId="activeTab"
-                    initial={false}
-                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                  />
-                )}
-              </Link>
-
-              <Link
-                to="/runs"
-                onClick={handleResultsClick}
-                className={`relative text-sm font-medium transition-colors duration-200 ${
-                  resultsDisabled
-                    ? "text-foreground/30 cursor-not-allowed"
-                    : isResultsActive
-                    ? "text-primary"
-                    : "text-foreground/70 hover:text-foreground"
-                }`}
-              >
-                Results
-                {isResultsActive && !resultsDisabled && (
-                  <motion.div
-                    className="absolute -bottom-1 left-0 right-0 h-0.5 bg-primary"
-                    layoutId="activeTab"
-                    initial={false}
-                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                  />
-                )}
-              </Link>
               {navItems.map((item) => (
                 <Link
                   key={item.name}
                   to={item.path}
+                  onClick={item.name === "Results" ? handleResultsClick : undefined}
                   className={`relative text-sm font-medium transition-colors duration-200 ${
-                    isActive(item.path)
+                    item.name === "Results" && resultsDisabled
+                      ? "text-foreground/30 cursor-not-allowed"
+                      : item.name === "Dashboard" && (!isAuthenticated || authLoading)
+                      ? "text-foreground/30 cursor-not-allowed"
+                      : isActive(item.path)
                       ? "text-primary"
                       : "text-foreground/70 hover:text-foreground"
                   }`}
@@ -271,43 +229,37 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
                 transition={{ duration: 0.2 }}
               >
                 <div className="flex flex-col space-y-4">
-                  <Link
-                    to="/"
-                    className={`text-sm font-medium transition-colors duration-200 ${
-                      !isAuthenticated || authLoading
-                        ? "text-foreground/30 cursor-not-allowed"
-                        : isDashboardActive,
-                      isActive(item.path)
-                        ? "text-primary"
-                        : "text-foreground/70 hover:text-foreground"
-                    }`}
-                    onClick={() => {
-                      if (isAuthenticated && !authLoading) {
-                        setIsMenuOpen(false)
-                      }
-                    }}
-                  >
-                    Dashboard
-                  </Link>
-
-                  <Link
-                    to="/runs"
-                    onClick={(event) => {
-                      handleResultsClick(event)
-                      if (!resultsDisabled) {
-                        setIsMenuOpen(false)
-                      }
-                    }}
-                    className={`glass-card px-4 py-2 text-sm font-medium border border-border/50 rounded-lg transition-colors ${
-                      resultsDisabled
-                        ? "text-foreground/30 cursor-not-allowed"
-                        : isResultsActive
-                        ? "text-primary"
-                        : "text-foreground/70 hover:text-foreground"
-                    }`}
-                  >
-                    Results
-                  </Link>
+                  {navItems.map((item) => (
+                    <Link
+                      key={item.name}
+                      to={item.path}
+                      onClick={(event) => {
+                        if (item.name === "Results") {
+                          handleResultsClick(event)
+                          if (!resultsDisabled) {
+                            setIsMenuOpen(false)
+                          }
+                        } else if (item.name === "Dashboard") {
+                          if (isAuthenticated && !authLoading) {
+                            setIsMenuOpen(false)
+                          }
+                        } else {
+                          setIsMenuOpen(false)
+                        }
+                      }}
+                      className={`glass-card px-4 py-2 text-sm font-medium border border-border/50 rounded-lg transition-colors ${
+                        item.name === "Results" && resultsDisabled
+                          ? "text-foreground/30 cursor-not-allowed"
+                          : item.name === "Dashboard" && (!isAuthenticated || authLoading)
+                          ? "text-foreground/30 cursor-not-allowed"
+                          : isActive(item.path)
+                          ? "text-primary"
+                          : "text-foreground/70 hover:text-foreground"
+                      }`}
+                    >
+                      {item.name}
+                    </Link>
+                  ))}
 
                   {isAuthenticated ? (
                     <>
