@@ -1,0 +1,29 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Vulnerable Web App</title>
+</head>
+<body>
+    <h1>Vulnerable Web Application</h1>
+    
+    <div id="login-form">
+        <h2>Login</h2>
+        <input type="text" id="username" placeholder="Username">
+        <input type="password" id="password" placeholder="Password">
+        <button onclick="login()">Login</button>
+    </div>
+    
+    <div id="user-info" style="display: none;">
+        <!-- User data will be displayed here -->
+    </div>
+    
+    <div id="file-upload">
+        <h2>File Upload</h2>
+        <input type="file" id="file-input">
+        <button onclick="uploadFile()">Upload</button>
+    </div>
+    
+    <script src="frontend.js"></script>
+</body>
+</html>

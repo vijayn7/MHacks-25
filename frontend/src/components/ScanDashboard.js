@@ -6,6 +6,7 @@ import { Shield, AlertTriangle, Target, Zap, Lock, Search } from "lucide-react"
 
 const ScanDashboard = ({ onStartScan }) => {
   const [targetUrl, setTargetUrl] = useState("http://localhost:3001")
+  const [scanName, setScanName] = useState("")
   const [maxPages, setMaxPages] = useState(30)
   const [notifyEmail, setNotifyEmail] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -29,6 +30,7 @@ const ScanDashboard = ({ onStartScan }) => {
 
     const scanRequest = {
       target_url: targetUrl,
+      name: scanName || null,
       max_pages: maxPages,
       notify_email: notifyEmail || null,
     }
@@ -115,6 +117,22 @@ const ScanDashboard = ({ onStartScan }) => {
                 />
               </div>
               <p className="mt-3 text-muted-foreground">Enter the URL you want to scan for security vulnerabilities</p>
+            </motion.div>
+
+            <motion.div variants={itemVariants}>
+              <label htmlFor="scanName" className="block text-lg font-semibold text-foreground mb-4">
+                Scan Instance Name (Optional)
+              </label>
+              <motion.input
+                type="text"
+                id="scanName"
+                value={scanName}
+                onChange={(e) => setScanName(e.target.value)}
+                placeholder="My Security Scan"
+                className="block w-full px-4 py-4 bg-input border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-lg transition-all duration-300"
+                whileFocus={{ scale: 1.02 }}
+              />
+              <p className="mt-3 text-muted-foreground">Give your scan a custom name to easily identify it later</p>
             </motion.div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

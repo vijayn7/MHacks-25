@@ -518,3 +518,4 @@ if __name__ == "__main__":
             print(f"  - {finding['title']} ({finding['severity']})")
     else:
         print("No test_pages.json found")
+

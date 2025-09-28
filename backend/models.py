@@ -17,6 +17,7 @@ class Severity(str, Enum):
 
 class CreateScanRequest(BaseModel):
     target_url: HttpUrl
+    name: Optional[str] = None
     max_pages: int = 30
     notify_email: Optional[str] = None
     consent: bool
@@ -24,6 +25,7 @@ class CreateScanRequest(BaseModel):
 class ScanRunResponse(BaseModel):
     id: str
     target_url: str
+    name: Optional[str] = None
     status: ScanStatus
     created_at: datetime
     completed_at: Optional[datetime] = None
@@ -50,3 +52,6 @@ class ScanEvent(BaseModel):
 
 class ReproduceRequest(BaseModel):
     finding_id: str
+
+class UpdateScanRunRequest(BaseModel):
+    name: Optional[str] = None

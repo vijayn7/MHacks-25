@@ -39,6 +39,10 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+# Allow committed frontend helpers
+!frontend/src/lib/
+!frontend/src/lib/**
+
 # Virtual environments
 venv/
 env/

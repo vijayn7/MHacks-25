@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { useParams, useNavigate } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import axios from "axios"
 import {
@@ -15,11 +15,15 @@ import {
   CheckCircle,
   ExternalLink,
   Activity,
-  Target,
   Search,
   Settings,
   Play,
+  Edit3,
+  Save,
+  X,
+  Trash2,
 } from "lucide-react"
+import { API_BASE_URL } from "../lib/api"
 
 
 const ScanResults = ({ currentScan }) => {
@@ -30,6 +34,12 @@ const ScanResults = ({ currentScan }) => {
   const [selectedFinding, setSelectedFinding] = useState(null);
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState([]);
+  const [codebasePath, setCodebasePath] = useState('');
+  const [dynamicScanning, setDynamicScanning] = useState(false);
+  const [newAIFindings, setNewAIFindings] = useState(0);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Handle navigation functions for "No Scans Found" message
   const handleDashboardClick = () => {
@@ -41,6 +51,74 @@ const ScanResults = ({ currentScan }) => {
     alert("Build screen - to be implemented")
   }
 
+  const runDynamicScan = async () => {
+    if (!codebasePath.trim()) {
+      alert('Please provide a codebase path for AI-powered analysis');
+      return;
+    }
+    try {
+      setDynamicScanning(true);
+      setNewAIFindings(0); // Reset counter for new analysis
+      const response = await axios.post(`http://localhost:8000/runs/${runId}/dynamic-scan`, {
+        codebase_path: codebasePath.trim()
+      });
+      if (response.data.status === 'completed') {
+        console.log(`AI-powered analysis completed! Found ${response.data.ai_generated_findings} new findings.`);
+      }
+    } catch (error) {
+      console.error('Dynamic scan error:', error);
+      alert('Dynamic scan failed: ' + (error.response?.data?.detail || error.message));
+      setDynamicScanning(false);
+    }
+  };
+
+  const handleStartRename = () => {
+    setIsRenaming(true);
+    setNewName(scanStatus?.name || '');
+  };
+
+  const handleCancelRename = () => {
+    setIsRenaming(false);
+    setNewName('');
+  };
+
+  const handleSaveRename = async () => {
+    if (!newName.trim()) {
+      alert('Please enter a name for the scan instance');
+      return;
+    }
+
+    try {
+      const response = await axios.patch(`/runs/${runId}`, {
+        name: newName.trim()
+      });
+      
+      setScanStatus(response.data);
+      setIsRenaming(false);
+      setNewName('');
+    } catch (error) {
+      console.error('Rename error:', error);
+      alert('Failed to rename scan instance: ' + (error.response?.data?.detail || error.message));
+    }
+  };
+
+  const handleDeleteScan = async () => {
+    if (!window.confirm('Are you sure you want to delete this scan? This action cannot be undone and will delete all findings and data associated with this scan.')) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      await axios.delete(`/runs/${runId}`);
+      alert('Scan deleted successfully');
+      navigate('/runs'); // Redirect to history page
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert('Failed to delete scan: ' + (error.response?.data?.detail || error.message));
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const fetchScanStatus = useCallback(async () => {
     try {
@@ -49,9 +127,12 @@ const ScanResults = ({ currentScan }) => {
       setLoading(false);
     } catch (error) {
       console.error('Failed to fetch scan status:', error);
+      if (error.response?.status === 401) {
+        navigate('/login');
+      }
       setLoading(false);
     }
-  }, [runId]);
+  }, [navigate, runId]);
 
   const fetchFindings = useCallback(async () => {
     try {
@@ -61,8 +142,11 @@ const ScanResults = ({ currentScan }) => {
       setFindings(response.data);
     } catch (error) {
       console.error('Failed to fetch findings:', error);
+      if (error.response?.status === 401) {
+        navigate('/login');
+      }
     }
-  }, [runId]);
+  }, [navigate, runId]);
 
   useEffect(() => {
     // If we're on /results route without a runId, check for current scan
@@ -82,19 +166,39 @@ const ScanResults = ({ currentScan }) => {
     fetchFindings();
 
     // Set up SSE for real-time updates
-    const eventSource = new EventSource(`http://localhost:8000/runs/${runId}/stream`);
+    const eventSource = new EventSource(`${API_BASE_URL}/runs/${runId}/stream`, { withCredentials: true });
 
-    eventSource.onmessage = (event) => {
+    eventSource.onmessage = async (event) => {
       const data = JSON.parse(event.data);
+      console.log('📡 SSE Event received:', data.event_type, data.data);
       setEvents(prev => [...prev, data]);
 
       if (data.event_type === 'status_update') {
         setScanStatus(prev => ({ ...prev, status: data.data.status }));
       } else if (data.event_type === 'finding_discovered') {
-        fetchFindings(); // Refresh findings when new one is discovered
+        console.log('🔍 New finding discovered:', data.data);
+        // Check if it's an AI-generated finding
+        if (data.data.ai_generated) {
+          setNewAIFindings(prev => prev + 1);
+        }
+        // Refresh findings to get the latest data
+        await fetchFindings();
       } else if (data.event_type === 'scan_completed') {
+        console.log('✅ Scan completed');
         fetchScanStatus();
-        fetchFindings();
+        await fetchFindings();
+      } else if (data.event_type === 'dynamic_scan_completed') {
+        console.log('🤖 Dynamic scan completed');
+        setDynamicScanning(false);
+        setNewAIFindings(0); // Reset counter
+        // Refresh findings to show AI-generated ones
+        await fetchFindings();
+        console.log(`✅ AI analysis completed! Found ${data.data.ai_generated_findings} new findings.`);
+      } else if (data.event_type === 'dynamic_scan_error') {
+        console.log('❌ Dynamic scan error:', data.data.error);
+        setDynamicScanning(false);
+        setNewAIFindings(0); // Reset counter
+        alert('AI-powered analysis failed: ' + data.data.error);
       }
     };
 
@@ -106,9 +210,7 @@ const ScanResults = ({ currentScan }) => {
       eventSource.close();
     };
 
-  }, [runId, fetchScanStatus, fetchFindings]);
-
-  
+  }, [runId, fetchFindings, fetchScanStatus, currentScan, navigate]);
 
   const getSeverityColor = (severity) => {
     switch (severity) {
@@ -276,9 +378,112 @@ const ScanResults = ({ currentScan }) => {
             </motion.div>
             <div>
               <h1 className="text-3xl font-bold text-foreground mb-2">Security Scan Results</h1>
-              <p className="text-muted-foreground text-lg">
-                Target: <span className="font-semibold text-foreground">{scanStatus.target_url}</span>
-              </p>
+              <div className="flex items-center gap-3 mb-2">
+                <p className="text-muted-foreground text-lg">
+                  Target: <span className="font-semibold text-foreground">{scanStatus.target_url}</span>
+                </p>
+                {!isRenaming && (
+                  <div className="flex items-center gap-2">
+                    <motion.button
+                      onClick={handleStartRename}
+                      className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      title="Rename scan instance"
+                    >
+                      <Edit3 className="h-4 w-4" />
+                    </motion.button>
+                    <motion.button
+                      onClick={handleDeleteScan}
+                      disabled={isDeleting}
+                      className="p-1 text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      title="Delete scan instance"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </motion.button>
+                  </div>
+                )}
+              </div>
+              {scanStatus.name && (
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground text-sm">Instance Name:</span>
+                  {isRenaming ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                        className="px-2 py-1 text-sm bg-background/50 border border-border rounded focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        placeholder="Enter instance name"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveRename();
+                          if (e.key === 'Escape') handleCancelRename();
+                        }}
+                      />
+                      <motion.button
+                        onClick={handleSaveRename}
+                        className="p-1 text-green-400 hover:text-green-300 transition-colors"
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        title="Save name"
+                      >
+                        <Save className="h-4 w-4" />
+                      </motion.button>
+                      <motion.button
+                        onClick={handleCancelRename}
+                        className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        title="Cancel"
+                      >
+                        <X className="h-4 w-4" />
+                      </motion.button>
+                    </div>
+                  ) : (
+                    <span className="font-semibold text-foreground">{scanStatus.name}</span>
+                  )}
+                </div>
+              )}
+              {!scanStatus.name && isRenaming && (
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground text-sm">Instance Name:</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      className="px-2 py-1 text-sm bg-background/50 border border-border rounded focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      placeholder="Enter instance name"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveRename();
+                        if (e.key === 'Escape') handleCancelRename();
+                      }}
+                    />
+                    <motion.button
+                      onClick={handleSaveRename}
+                      className="p-1 text-green-400 hover:text-green-300 transition-colors"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      title="Save name"
+                    >
+                      <Save className="h-4 w-4" />
+                    </motion.button>
+                    <motion.button
+                      onClick={handleCancelRename}
+                      className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      title="Cancel"
+                    >
+                      <X className="h-4 w-4" />
+                    </motion.button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <div className="text-right">
@@ -300,6 +505,79 @@ const ScanResults = ({ currentScan }) => {
               <span className="font-bold text-xl text-primary">{scanStatus.risk_score}/100</span>
             </div>
           </div>
+        </div>
+      </motion.div>
+
+      {/* AI-Powered Dynamic Scan Section */}
+      <motion.div
+        className="glass-card p-6 mb-8 rounded-2xl border border-primary/20"
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.2 }}
+      >
+        <div className="flex items-center space-x-3 mb-4">
+          <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+            <Activity className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-foreground">AI-Powered Dynamic Analysis</h2>
+            <p className="text-muted-foreground">Analyze your codebase with advanced AI-generated security tests</p>
+          </div>
+        </div>
+        
+        <div className="flex items-center space-x-4">
+          <input
+            type="text"
+            placeholder="Enter codebase path (e.g., /path/to/your/code)"
+            value={codebasePath}
+            onChange={(e) => setCodebasePath(e.target.value)}
+            className="flex-1 px-4 py-2 bg-background/50 border border-border/50 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+          />
+          <motion.button
+            onClick={runDynamicScan}
+            disabled={dynamicScanning || !codebasePath.trim()}
+            className="px-6 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            {dynamicScanning ? (
+              <>
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </motion.div>
+                <span>Analyzing...</span>
+                {newAIFindings > 0 && (
+                  <span className="ml-2 px-2 py-1 bg-green-500 text-white text-xs rounded-full">
+                    +{newAIFindings} found
+                  </span>
+                )}
+              </>
+            ) : (
+              <>
+                <Activity className="h-4 w-4" />
+                <span>Run AI Analysis</span>
+              </>
+            )}
+          </motion.button>
+        </div>
+        
+        <div className="mt-4 text-sm text-muted-foreground">
+          <p>🤖 Uses Gemini AI to generate targeted security tests based on your actual code patterns</p>
+          <p>🎯 Covers 8 attack categories with 50+ sophisticated attack vectors</p>
+          <p>⚡ Results appear in real-time below with traditional findings</p>
+          {newAIFindings > 0 && (
+            <motion.p 
+              className="text-green-400 font-medium"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+            >
+              ✅ {newAIFindings} AI-generated findings discovered and added to the list below!
+            </motion.p>
+          )}
         </div>
       </motion.div>
 
@@ -368,6 +646,16 @@ const ScanResults = ({ currentScan }) => {
                             <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
                               {finding.category}
                             </span>
+                            {finding.ai_generated && (
+                              <span className="px-2 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs rounded-full font-medium">
+                                AI-Generated
+                              </span>
+                            )}
+                            {finding.owasp_category && (
+                              <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full font-medium">
+                                {finding.owasp_category}
+                              </span>
+                            )}
                           </div>
                           <h3 className="font-bold text-foreground mb-2 text-lg">{finding.title}</h3>
                           <p className="text-muted-foreground line-clamp-2 leading-relaxed">{finding.description}</p>
