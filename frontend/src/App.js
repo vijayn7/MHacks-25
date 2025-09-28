@@ -145,9 +145,9 @@ const AppRoutes = () => {
                     <ScanDashboard onStartScan={handleStartScan} />
                   </motion.div>
                 </ProtectedRoute>
-              }
-            />
-            <Route
+                }
+              />
+              <Route
               path="/scan/:runId"
               element={
                 <ProtectedRoute>
@@ -157,10 +157,20 @@ const AppRoutes = () => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
                     transition={{ duration: 0.5 }}
+                    className="h-screen"
                   >
                     <ScanResults />
                   </motion.div>
                 </ProtectedRoute>
+              }
+            />
+              <Route
+                path="/blocks"
+                element={
+                  <ProtectedRoute>
+                  <motion.div
+                    key="blocks"
+                  </ProtectedRoute>
               }
             />
             <Route
