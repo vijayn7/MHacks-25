@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useParams } from "react-router-dom"
+import { useState, useEffect, useCallback } from "react"
+import { useParams, useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import axios from "axios"
 import {
@@ -16,18 +16,66 @@ import {
   ExternalLink,
   Activity,
   Target,
+  Search,
+  Settings,
+  Play,
 } from "lucide-react"
 
-const ScanResults = () => {
+
+const ScanResults = ({ currentScan }) => {
   const { runId } = useParams();
+  const navigate = useNavigate();
   const [scanStatus, setScanStatus] = useState(null);
   const [findings, setFindings] = useState([]);
   const [selectedFinding, setSelectedFinding] = useState(null);
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState([]);
 
+  // Handle navigation functions for "No Scans Found" message
+  const handleDashboardClick = () => {
+    navigate("/")
+  }
+
+  const handleBuildClick = () => {
+    console.log("Build screen - to be implemented")
+    alert("Build screen - to be implemented")
+  }
+
+
+  const fetchScanStatus = useCallback(async () => {
+    try {
+      const response = await axios.get(`/runs/${runId}`);
+      setScanStatus(response.data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Failed to fetch scan status:', error);
+      setLoading(false);
+    }
+  }, [runId]);
+
+  const fetchFindings = useCallback(async () => {
+    try {
+      console.log(`🔍 Fetching findings for run ${runId}`);
+      const response = await axios.get(`/runs/${runId}/findings`);
+      console.log(`✅ Found ${response.data.length} findings:`, response.data.slice(0, 3));
+      setFindings(response.data);
+    } catch (error) {
+      console.error('Failed to fetch findings:', error);
+    }
+  }, [runId]);
+
   useEffect(() => {
-    if (!runId) return;
+    // If we're on /results route without a runId, check for current scan
+    if (!runId) {
+      if (currentScan && currentScan.runId) {
+        // Redirect to the current scan
+        navigate(`/scan/${currentScan.runId}`, { replace: true })
+        return
+      }
+      // No runId and no current scan - show "No Scans Found" message
+      setLoading(false)
+      return
+    }
 
     // Fetch initial scan status and findings
     fetchScanStatus();
@@ -58,29 +106,9 @@ const ScanResults = () => {
       eventSource.close();
     };
 
-  }, [runId]);
+  }, [runId, fetchScanStatus, fetchFindings]);
 
-  const fetchScanStatus = async () => {
-    try {
-      const response = await axios.get(`/runs/${runId}`);
-      setScanStatus(response.data);
-      setLoading(false);
-    } catch (error) {
-      console.error('Failed to fetch scan status:', error);
-      setLoading(false);
-    }
-  };
-
-  const fetchFindings = async () => {
-    try {
-      console.log(`🔍 Fetching findings for run ${runId}`);
-      const response = await axios.get(`/runs/${runId}/findings`);
-      console.log(`✅ Found ${response.data.length} findings:`, response.data.slice(0, 3));
-      setFindings(response.data);
-    } catch (error) {
-      console.error('Failed to fetch findings:', error);
-    }
-  };
+  
 
   const getSeverityColor = (severity) => {
     switch (severity) {
@@ -121,6 +149,83 @@ const ScanResults = () => {
       alert('Failed to replay finding');
     }
   };
+
+  // Show "No Scans Found" message when no runId and no current scan
+  if (!runId && !currentScan) {
+    return (
+      <motion.div 
+        className="px-4 py-6" 
+        initial={{ opacity: 0, y: 20 }} 
+        animate={{ opacity: 1, y: 0 }} 
+        transition={{ duration: 0.5 }}
+      >
+        {/* Header */}
+        <motion.div
+          className="glass-card p-8 mb-8 rounded-2xl"
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.1 }}
+        >
+          <div className="flex items-center space-x-6">
+            <motion.div
+              className="w-16 h-16 bg-primary/20 rounded-xl flex items-center justify-center"
+              whileHover={{ scale: 1.1, rotate: 5 }}
+            >
+              <Search className="h-8 w-8 text-primary" />
+            </motion.div>
+            <div>
+              <h1 className="text-3xl font-bold text-foreground mb-2">Scan Results</h1>
+              <p className="text-muted-foreground text-lg">
+                View and analyze your security scan results
+              </p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* No Scans Message */}
+        <motion.div
+          className="glass-card p-8 rounded-2xl text-center"
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.2 }}
+        >
+          <motion.div
+            className="w-24 h-24 bg-blue-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6"
+            whileHover={{ scale: 1.1 }}
+          >
+            <Search className="h-12 w-12 text-blue-400" />
+          </motion.div>
+          
+          <h2 className="text-2xl font-bold text-foreground mb-4">No Scans Found</h2>
+          <p className="text-muted-foreground text-lg mb-8 max-w-2xl mx-auto">
+            You currently have no scans. Go to the Dashboard to start a full scan or customize your own on the Build screen.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <motion.button
+              onClick={handleDashboardClick}
+              className="glass-card px-8 py-4 text-foreground hover:bg-primary/10 transition-all duration-300 font-medium rounded-lg border border-primary/20 hover:border-primary/40 flex items-center justify-center"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <Play className="h-5 w-5 mr-2" />
+              Go to Dashboard
+            </motion.button>
+
+            <motion.button
+              onClick={handleBuildClick}
+              className="glass-card px-8 py-4 text-foreground hover:bg-primary/10 transition-all duration-300 font-medium rounded-lg border border-primary/20 hover:border-primary/40 flex items-center justify-center"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <Settings className="h-5 w-5 mr-2" />
+              Build Screen
+            </motion.button>
+          </div>
+        </motion.div>
+      </motion.div>
+    )
+  }
 
   if (loading) {
     return (

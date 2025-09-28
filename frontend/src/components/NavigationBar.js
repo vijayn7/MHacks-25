@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { Shield, Play, AlertTriangle } from "lucide-react"
+import { Shield, Play, AlertTriangle, Settings, Search } from "lucide-react"
 
 const NavigationBar = ({ currentScan, onNewScan }) => {
   const location = useLocation()
@@ -16,19 +16,21 @@ const NavigationBar = ({ currentScan, onNewScan }) => {
 
   const navItems = [
     { name: "Dashboard", path: "/" },
-    { 
-      name: "Results", 
-      path: currentScan ? `/scan/${currentScan.runId}` : (isOnScanResults ? location.pathname : "/"),
-      disabled: !currentScan && !isOnScanResults
-    }
+    { name: "Results", path: "/results" },
+    { name: "Build", path: "/build" }
   ]
 
   const isActive = (path) => {
     if (path === "/") {
       return location.pathname === "/"
     }
-    // For Results tab, show as active when on any scan results page
-    return location.pathname.startsWith("/scan/")
+    if (path === "/results") {
+      return location.pathname === "/results" || location.pathname.startsWith("/scan/")
+    }
+    if (path === "/build") {
+      return location.pathname === "/build"
+    }
+    return location.pathname === path
   }
 
   const handleNewScanClick = () => {
@@ -93,15 +95,13 @@ const NavigationBar = ({ currentScan, onNewScan }) => {
                   key={item.name}
                   to={item.path}
                   className={`relative text-sm font-medium transition-colors duration-200 ${
-                    item.disabled
-                      ? "text-foreground/30 cursor-not-allowed"
-                      : isActive(item.path)
+                    isActive(item.path)
                       ? "text-primary"
                       : "text-foreground/70 hover:text-foreground"
                   }`}
                 >
                   {item.name}
-                  {isActive(item.path) && !item.disabled && (
+                  {isActive(item.path) && (
                     <motion.div
                       className="absolute -bottom-1 left-0 right-0 h-0.5 bg-primary"
                       layoutId="activeTab"
@@ -169,9 +169,7 @@ const NavigationBar = ({ currentScan, onNewScan }) => {
                     key={item.name}
                     to={item.path}
                     className={`text-sm font-medium transition-colors duration-200 ${
-                      item.disabled
-                        ? "text-foreground/30 cursor-not-allowed"
-                        : isActive(item.path)
+                      isActive(item.path)
                         ? "text-primary"
                         : "text-foreground/70 hover:text-foreground"
                     }`}
