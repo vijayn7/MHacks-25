@@ -21,6 +21,7 @@ from database import (
     create_finding, get_findings_by_run, get_finding
 )
 from models import CreateScanRequest, ScanRunResponse, FindingResponse, ScanEvent, ScanStatus
+from agent_mail import dispatch_post_scan_email
 
 app = FastAPI(
     title="Swarm Scanner API",
@@ -106,12 +107,14 @@ async def create_scan(
     # Create scan run
     run_id = str(uuid.uuid4())[:8]
 
+    notify_email = scan_request.notify_email or os.getenv("DEFAULT_NOTIFY_EMAIL", "vnannapu@umich.edu")
+
     scan_data = {
         "id": run_id,
         "target_url": str(scan_request.target_url),
         "status": ScanStatus.QUEUED,
         "max_pages": scan_request.max_pages,
-        "notify_email": scan_request.notify_email,
+        "notify_email": notify_email,
         "consent_ip": request.client.host,
     }
 
@@ -247,6 +250,9 @@ async def run_scan_worker(run_id: str, target_url: str, max_pages: int):
                 "timestamp": datetime.now().isoformat()
             })
 
+        # Kick off Agent Mail notification
+        asyncio.create_task(dispatch_post_scan_email(run_id))
+
     except Exception as e:
         # Mark as failed
         await update_scan_run(run_id, {"status": ScanStatus.FAILED})
@@ -257,6 +263,9 @@ async def run_scan_worker(run_id: str, target_url: str, max_pages: int):
                 "data": {"status": "failed", "error": str(e)},
                 "timestamp": datetime.now().isoformat()
             })
+
+        # Notify operators about failure details
+        asyncio.create_task(dispatch_post_scan_email(run_id, error_message=str(e)))
 
 async def create_demo_findings(run_id: str, target_url: str):
     """Create demo findings for testing - replace with actual scanner"""
