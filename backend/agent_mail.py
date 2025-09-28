@@ -26,17 +26,24 @@ def _coalesce_notify_email(email: Optional[str]) -> Optional[str]:
 async def prepare_scan_digest(run_id: str) -> Dict[str, Any]:
     """Collect metadata and findings for a completed scan run."""
 
+    logger.debug("📋 Fetching scan run data for %s", run_id)
     run = await get_scan_run(run_id)
     if not run:
+        logger.error("❌ Scan run %s not found in database", run_id)
         raise ValueError(f"Scan run {run_id} not found")
 
+    logger.debug("🔍 Fetching findings for run %s", run_id)
     findings = await get_findings_by_run(run_id)
+    logger.debug("📊 Found %d findings for run %s", len(findings), run_id)
 
     severity_totals: Dict[str, int] = {}
     highest_severity: Optional[str] = None
 
+    findings_payload = []
+
     for finding in findings:
-        severity = finding.severity.lower()
+        severity_value = getattr(finding, "severity", "") or ""
+        severity = severity_value.lower() if isinstance(severity_value, str) else str(severity_value).lower()
         severity_totals[severity] = severity_totals.get(severity, 0) + 1
         if highest_severity is None:
             highest_severity = severity
@@ -46,11 +53,32 @@ async def prepare_scan_digest(run_id: str) -> Dict[str, Any]:
             if new_index < current_index:
                 highest_severity = severity
 
+        findings_payload.append(
+            {
+                "id": finding.id,
+                "category": finding.category,
+                "title": finding.title,
+                "severity": severity_value,
+                "description": finding.description,
+                "evidence": finding.evidence,
+                "fix_snippet": finding.fix_snippet,
+                "reproduce_command": finding.reproduce_command,
+                "priority_score": finding.priority_score,
+                "created_at": finding.created_at.isoformat() if finding.created_at else None,
+            }
+        )
+
+    status_value = getattr(run, "status", ScanStatus.COMPLETED.value)
+    if isinstance(status_value, ScanStatus):
+        status_value = status_value.value
+
+    risk_score = getattr(run, "risk_score", 0) or 0
+
     digest: Dict[str, Any] = {
         "run_id": run.id,
         "target_url": run.target_url,
-        "status": run.status,
-        "risk_score": run.risk_score,
+        "status": status_value,
+        "risk_score": risk_score,
         "created_at": run.created_at.isoformat() if run.created_at else None,
         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
         "finding_count": len(findings),
@@ -59,22 +87,11 @@ async def prepare_scan_digest(run_id: str) -> Dict[str, Any]:
         "notify_email": _coalesce_notify_email(getattr(run, "notify_email", None)),
         "consent_ip": getattr(run, "consent_ip", None),
         "max_pages": getattr(run, "max_pages", None),
-        "findings": [
-            {
-                "id": finding.id,
-                "category": finding.category,
-                "title": finding.title,
-                "severity": finding.severity,
-                "description": finding.description,
-                "evidence": finding.evidence,
-                "fix_snippet": finding.fix_snippet,
-                "reproduce_command": finding.reproduce_command,
-                "priority_score": finding.priority_score,
-                "created_at": finding.created_at.isoformat() if finding.created_at else None,
-            }
-            for finding in findings
-        ],
+        "findings": findings_payload,
     }
+
+    logger.debug("✅ Digest prepared for %s: %d findings, risk score %d, highest severity: %s, target: %s", 
+                run_id, len(findings), risk_score, highest_severity or "none", run.target_url)
 
     return digest
 
@@ -82,23 +99,30 @@ async def prepare_scan_digest(run_id: str) -> Dict[str, Any]:
 async def dispatch_post_scan_email(run_id: str, *, error_message: Optional[str] = None) -> None:
     """Send the scan summary email through Agent Mail SDK."""
 
+    logger.info("🚀 Starting email dispatch process for run %s%s", 
+                run_id, f" (error case: {error_message[:50]}...)" if error_message else "")
+
     if not AGENTMAIL_INBOX_ID or not AGENTMAIL_API_KEY:
-        logger.warning("Agent Mail credentials are not configured; skipping email dispatch for run %s", run_id)
+        logger.warning("❌ Agent Mail credentials are not configured; skipping email dispatch for run %s", run_id)
         return
 
     try:
+        logger.debug("📊 Preparing scan digest for run %s", run_id)
         digest = await prepare_scan_digest(run_id)
+        logger.debug("✅ Scan digest prepared successfully: %d findings, risk score %s", 
+                    digest.get("finding_count", 0), digest.get("risk_score", "unknown"))
     except ValueError as exc:
-        logger.error("Unable to build scan digest for %s: %s", run_id, exc)
+        logger.error("❌ Unable to build scan digest for %s: %s", run_id, exc)
         return
 
     if error_message:
         digest["status"] = ScanStatus.FAILED.value
         digest["error"] = error_message
+        logger.info("⚠️ Email will report scan failure for run %s", run_id)
 
     recipient = _coalesce_notify_email(digest.get("notify_email"))
     if not recipient:
-        logger.warning("No recipient email resolved for run %s; skipping Agent Mail dispatch", run_id)
+        logger.warning("❌ No recipient email resolved for run %s; skipping Agent Mail dispatch", run_id)
         return
 
     status_value: Any = digest.get("status", ScanStatus.COMPLETED.value)
@@ -106,16 +130,24 @@ async def dispatch_post_scan_email(run_id: str, *, error_message: Optional[str] 
         status_value = status_value.value
 
     subject = f"Swarm scan {status_value} for {digest.get('target_url', '')}".strip()
+    
+    logger.info("📧 Preparing to send email to %s with subject: '%s'", recipient, subject)
 
     # Generate email body from the scan digest
+    logger.debug("🎨 Generating email HTML body for run %s", run_id)
     email_body = _generate_email_body(digest, error_message)
+    body_size_kb = len(email_body.encode('utf-8')) // 1024
+    logger.debug("✅ Email body generated: %d KB", body_size_kb)
 
     try:
         # Import Agent Mail SDK (lazy import to avoid startup issues)
+        logger.debug("📦 Importing Agent Mail SDK")
         from agentmail import AsyncAgentMail
         
+        logger.debug("🔐 Creating Agent Mail client with inbox ID: %s", AGENTMAIL_INBOX_ID)
         client = AsyncAgentMail(api_key=AGENTMAIL_API_KEY)
         
+        logger.info("📤 Sending email via Agent Mail API...")
         await client.inboxes.messages.send(
             inbox_id=AGENTMAIL_INBOX_ID,
             to=recipient,
@@ -123,10 +155,20 @@ async def dispatch_post_scan_email(run_id: str, *, error_message: Optional[str] 
             html=email_body,
         )
         
-        logger.info("Agent Mail dispatched for run %s to %s", run_id, recipient)
+        logger.info("✅ Agent Mail email successfully sent for run %s to %s (subject: '%s')", 
+                   run_id, recipient, subject)
         
     except Exception as exc:
-        logger.error("Agent Mail dispatch failed for run %s: %s", run_id, exc)
+        logger.error("❌ Agent Mail dispatch failed for run %s to %s: %s", run_id, recipient, exc)
+        # Log additional context for debugging
+        logger.debug("Failed email details - inbox_id: %s, recipient: %s, subject length: %d chars, body size: %d KB", 
+                    AGENTMAIL_INBOX_ID, recipient, len(subject), body_size_kb)
+        
+        # Log specific API error details if available
+        if hasattr(exc, 'status_code'):
+            logger.error("API Error Details - Status: %d, Body: %s", exc.status_code, getattr(exc, 'body', 'No body'))
+        if hasattr(exc, 'headers'):
+            logger.debug("API Response Headers: %s", exc.headers)
 
 
 def _generate_email_body(digest: Dict[str, Any], error_message: Optional[str] = None) -> str:
