@@ -22,6 +22,11 @@ from database import (
 )
 from models import CreateScanRequest, ScanRunResponse, FindingResponse, ScanEvent, ScanStatus
 from agent_mail import dispatch_post_scan_email
+import sys
+from pathlib import Path
+
+# Add scanner directory to path for dynamic scanner
+sys.path.append(str(Path(__file__).parent.parent / "scanner"))
 
 app = FastAPI(
     title="Swarm Scanner API",
@@ -391,7 +396,7 @@ async def run_real_crawler(run_id: str, target_url: str, max_pages: int):
                 "timestamp": datetime.now().isoformat()
             })
 
-async def run_real_scanners(run_id: str, target_url: str):
+async def run_real_scanners(run_id: str, target_url: str, codebase_path: str = None):
     """Run real security scanners on crawler output"""
     try:
         import sys
@@ -510,6 +515,106 @@ async def run_real_scanners(run_id: str, target_url: str):
                 "data": {"error": str(e)},
                 "timestamp": datetime.now().isoformat()
             })
+
+@app.post("/runs/{run_id}/dynamic-scan")
+async def run_dynamic_scan(run_id: str, codebase_path: str):
+    """Run AI-powered dynamic analysis on provided codebase"""
+    try:
+        # Check if scan run exists
+        scan_run = await get_scan_run(run_id)
+        if not scan_run:
+            raise HTTPException(status_code=404, detail="Scan run not found")
+        
+        # Check if codebase path exists
+        if not os.path.exists(codebase_path):
+            raise HTTPException(status_code=400, detail="Codebase path does not exist")
+        
+        # Send dynamic analysis status
+        if run_id in active_connections:
+            active_connections[run_id].append({
+                "event_type": "status_update",
+                "data": {"status": "running", "message": "Running AI-powered dynamic analysis..."},
+                "timestamp": datetime.now().isoformat()
+            })
+        
+        # Run dynamic scanner
+        from dynamic_scanner import DynamicScanner
+        dynamic_scanner = DynamicScanner()
+        dynamic_results = await dynamic_scanner.run_full_analysis(codebase_path, scan_run.target_url)
+        
+        # Convert dynamic findings to database format
+        dynamic_findings = []
+        if 'owasp_findings' in dynamic_results:
+            for finding_data in dynamic_results['owasp_findings']:
+                db_finding = {
+                    "id": finding_data.get("id", str(uuid.uuid4())[:8]),
+                    "run_id": run_id,
+                    "category": finding_data.get("category", "ai_generated"),
+                    "severity": finding_data.get("severity", "medium"),
+                    "title": finding_data.get("title", "AI-Generated Security Test"),
+                    "description": finding_data.get("description", ""),
+                    "evidence": finding_data.get("evidence", {}),
+                    "fix_snippet": finding_data.get("fix_snippet", ""),
+                    "reproduce_command": finding_data.get("reproduce_command", ""),
+                    "priority_score": finding_data.get("priority_score", 50),
+                    "ai_generated": True,
+                    "owasp_category": finding_data.get("owasp_category", "A04"),
+                    "attack_category": finding_data.get("attack_category", "unknown")
+                }
+                dynamic_findings.append(db_finding)
+                await create_finding(db_finding)
+                
+                # Send finding discovered event
+                if run_id in active_connections:
+                    active_connections[run_id].append({
+                        "event_type": "finding_discovered",
+                        "data": {
+                            "finding_id": db_finding["id"],
+                            "category": db_finding["category"],
+                            "severity": db_finding["severity"],
+                            "title": db_finding["title"],
+                            "ai_generated": True
+                        },
+                        "timestamp": datetime.now().isoformat()
+                    })
+        
+        # Update scan run with dynamic analysis results
+        await update_scan_run(run_id, {
+            "dynamic_analysis": dynamic_results,
+            "ai_generated_findings": len(dynamic_findings)
+        })
+        
+        # Send completion status
+        if run_id in active_connections:
+            active_connections[run_id].append({
+                "event_type": "dynamic_scan_completed",
+                "data": {
+                    "status": "completed",
+                    "ai_generated_findings": len(dynamic_findings),
+                    "total_files_analyzed": dynamic_results.get('total_files', 0),
+                    "languages_detected": dynamic_results.get('languages', []),
+                    "test_cases_generated": dynamic_results.get('total_tests', 0)
+                },
+                "timestamp": datetime.now().isoformat()
+            })
+        
+        return {
+            "status": "completed",
+            "ai_generated_findings": len(dynamic_findings),
+            "total_files_analyzed": dynamic_results.get('total_files', 0),
+            "languages_detected": dynamic_results.get('languages', []),
+            "test_cases_generated": dynamic_results.get('total_tests', 0)
+        }
+        
+    except Exception as e:
+        print(f"❌ Dynamic scan error: {str(e)}")
+        if run_id in active_connections:
+            active_connections[run_id].append({
+                "event_type": "dynamic_scan_error",
+                "data": {"error": str(e)},
+                "timestamp": datetime.now().isoformat()
+            })
+        raise HTTPException(status_code=500, detail=f"Dynamic scan failed: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

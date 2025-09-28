@@ -40,6 +40,8 @@ async def prepare_scan_digest(run_id: str) -> Dict[str, Any]:
     highest_severity: Optional[str] = None
 
     findings_payload = []
+    ai_generated_count = 0
+    traditional_count = 0
 
     for finding in findings:
         severity_value = getattr(finding, "severity", "") or ""
@@ -53,6 +55,13 @@ async def prepare_scan_digest(run_id: str) -> Dict[str, Any]:
             if new_index < current_index:
                 highest_severity = severity
 
+        # Track AI-generated vs traditional findings
+        is_ai_generated = getattr(finding, "ai_generated", False)
+        if is_ai_generated:
+            ai_generated_count += 1
+        else:
+            traditional_count += 1
+
         findings_payload.append(
             {
                 "id": finding.id,
@@ -65,6 +74,9 @@ async def prepare_scan_digest(run_id: str) -> Dict[str, Any]:
                 "reproduce_command": finding.reproduce_command,
                 "priority_score": finding.priority_score,
                 "created_at": finding.created_at.isoformat() if finding.created_at else None,
+                "ai_generated": is_ai_generated,
+                "owasp_category": getattr(finding, "owasp_category", ""),
+                "attack_category": getattr(finding, "attack_category", ""),
             }
         )
 
@@ -82,12 +94,15 @@ async def prepare_scan_digest(run_id: str) -> Dict[str, Any]:
         "created_at": run.created_at.isoformat() if run.created_at else None,
         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
         "finding_count": len(findings),
+        "traditional_findings": traditional_count,
+        "ai_generated_findings": ai_generated_count,
         "finding_summary": severity_totals,
         "highest_severity": highest_severity,
         "notify_email": _coalesce_notify_email(getattr(run, "notify_email", None)),
         "consent_ip": getattr(run, "consent_ip", None),
         "max_pages": getattr(run, "max_pages", None),
         "findings": findings_payload,
+        "ai_analysis_enabled": ai_generated_count > 0,
     }
 
     logger.debug("✅ Digest prepared for %s: %d findings, risk score %d, highest severity: %s, target: %s", 

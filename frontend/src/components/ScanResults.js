@@ -25,6 +25,8 @@ const ScanResults = () => {
   const [selectedFinding, setSelectedFinding] = useState(null);
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState([]);
+  const [codebasePath, setCodebasePath] = useState('');
+  const [dynamicScanning, setDynamicScanning] = useState(false);
 
   useEffect(() => {
     if (!runId) return;
@@ -47,6 +49,12 @@ const ScanResults = () => {
       } else if (data.event_type === 'scan_completed') {
         fetchScanStatus();
         fetchFindings();
+      } else if (data.event_type === 'dynamic_scan_completed') {
+        setDynamicScanning(false);
+        fetchFindings(); // Refresh findings to show AI-generated ones
+      } else if (data.event_type === 'dynamic_scan_error') {
+        setDynamicScanning(false);
+        alert('AI-powered analysis failed: ' + data.data.error);
       }
     };
 
@@ -119,6 +127,28 @@ const ScanResults = () => {
     } catch (error) {
       console.error('Failed to replay finding:', error);
       alert('Failed to replay finding');
+    }
+  };
+
+  const runDynamicScan = async () => {
+    if (!codebasePath.trim()) {
+      alert('Please provide a codebase path for AI-powered analysis');
+      return;
+    }
+
+    try {
+      setDynamicScanning(true);
+      const response = await axios.post(`http://localhost:8000/runs/${runId}/dynamic-scan`, {
+        codebase_path: codebasePath.trim()
+      });
+      
+      if (response.data.status === 'completed') {
+        console.log(`AI-powered analysis completed! Found ${response.data.ai_generated_findings} new findings.`);
+      }
+    } catch (error) {
+      console.error('Dynamic scan error:', error);
+      alert('Dynamic scan failed: ' + (error.response?.data?.detail || error.message));
+      setDynamicScanning(false);
     }
   };
 
@@ -198,6 +228,64 @@ const ScanResults = () => {
         </div>
       </motion.div>
 
+      {/* AI-Powered Dynamic Scan Section */}
+      <motion.div
+        className="glass-card p-6 mb-8 rounded-2xl border border-primary/20"
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.2 }}
+      >
+        <div className="flex items-center space-x-3 mb-4">
+          <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+            <Activity className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-foreground">AI-Powered Dynamic Analysis</h2>
+            <p className="text-muted-foreground">Analyze your codebase with advanced AI-generated security tests</p>
+          </div>
+        </div>
+        
+        <div className="flex items-center space-x-4">
+          <input
+            type="text"
+            placeholder="Enter codebase path (e.g., /path/to/your/code)"
+            value={codebasePath}
+            onChange={(e) => setCodebasePath(e.target.value)}
+            className="flex-1 px-4 py-2 bg-background/50 border border-border/50 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+          />
+          <motion.button
+            onClick={runDynamicScan}
+            disabled={dynamicScanning || !codebasePath.trim()}
+            className="px-6 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            {dynamicScanning ? (
+              <>
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </motion.div>
+                <span>Analyzing...</span>
+              </>
+            ) : (
+              <>
+                <Activity className="h-4 w-4" />
+                <span>Run AI Analysis</span>
+              </>
+            )}
+          </motion.button>
+        </div>
+        
+        <div className="mt-4 text-sm text-muted-foreground">
+          <p>🤖 Uses Gemini AI to generate targeted security tests based on your actual code patterns</p>
+          <p>🎯 Covers 8 attack categories with 50+ sophisticated attack vectors</p>
+          <p>⚡ Results appear in real-time below with traditional findings</p>
+        </div>
+      </motion.div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Findings List */}
         <motion.div
@@ -263,6 +351,16 @@ const ScanResults = () => {
                             <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
                               {finding.category}
                             </span>
+                            {finding.ai_generated && (
+                              <span className="px-2 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs rounded-full font-medium">
+                                AI-Generated
+                              </span>
+                            )}
+                            {finding.owasp_category && (
+                              <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full font-medium">
+                                {finding.owasp_category}
+                              </span>
+                            )}
                           </div>
                           <h3 className="font-bold text-foreground mb-2 text-lg">{finding.title}</h3>
                           <p className="text-muted-foreground line-clamp-2 leading-relaxed">{finding.description}</p>
