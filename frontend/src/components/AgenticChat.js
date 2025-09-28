@@ -32,6 +32,7 @@ const AgenticChat = ({ onStartTestGeneration }) => {
   const [isGenerating, setIsGenerating] = useState(false)
   const [currentTestRequest, setCurrentTestRequest] = useState(null)
   const [activeTab, setActiveTab] = useState("chat")
+  const [selectedRepository, setSelectedRepository] = useState(null)
   const messagesEndRef = useRef(null)
 
   const scrollToBottom = () => {
@@ -41,6 +42,27 @@ const AgenticChat = ({ onStartTestGeneration }) => {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  const handleRepositorySelected = (repo) => {
+    setSelectedRepository(repo);
+    
+    if (repo) {
+      // Add a message about repository selection
+      const repoMessage = {
+        id: Date.now(),
+        type: "bot",
+        content: `🎯 **Repository Selected**: \`${repo}\`\n\nI can now analyze your code and generate highly targeted test cases based on your actual codebase. What specific security concerns would you like me to test for?`,
+        timestamp: new Date(),
+        suggestions: [
+          "Test authentication functions in this repo",
+          "Check for SQL injection vulnerabilities",
+          "Scan for XSS in user inputs",
+          "Test authorization and access controls"
+        ]
+      };
+      setMessages(prev => [...prev, repoMessage]);
+    }
+  };
 
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading) return
@@ -214,7 +236,12 @@ const AgenticChat = ({ onStartTestGeneration }) => {
             </motion.div>
             <div>
               <h1 className="text-xl font-bold gradient-text">AI Security Testing Assistant</h1>
-              <p className="text-sm text-muted-foreground">Describe what you want to test, and I'll create custom test cases for you</p>
+              <p className="text-sm text-muted-foreground">
+                {selectedRepository 
+                  ? `Analyzing repository: ${selectedRepository}` 
+                  : "Describe what you want to test, and I'll create custom test cases for you"
+                }
+              </p>
             </div>
           </div>
               <div className="flex items-center space-x-2">
@@ -524,6 +551,7 @@ const AgenticChat = ({ onStartTestGeneration }) => {
                 }]);
                 setActiveTab("chat");
               }}
+              onRepositorySelected={handleRepositorySelected}
             />
           </div>
         </div>

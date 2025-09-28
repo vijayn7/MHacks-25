@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import axios from "axios"
 import {
   Shield,
   AlertTriangle,
@@ -23,7 +22,7 @@ import {
   X,
   Trash2,
 } from "lucide-react"
-import { API_BASE_URL } from "../lib/api"
+import { api } from "../lib/api"
 
 
 const ScanResults = ({ currentScan }) => {
@@ -59,15 +58,18 @@ const ScanResults = ({ currentScan }) => {
     try {
       setDynamicScanning(true);
       setNewAIFindings(0); // Reset counter for new analysis
-      const response = await axios.post(`${API_BASE_URL}/runs/${runId}/dynamic-scan`, {
-        codebase_path: codebasePath.trim()
+      const response = await api(`/runs/${runId}/dynamic-scan`, {
+        method: 'POST',
+        body: JSON.stringify({
+          codebase_path: codebasePath.trim()
+        })
       });
-      if (response.data.status === 'completed') {
-        console.log(`AI-powered analysis completed! Found ${response.data.ai_generated_findings} new findings.`);
+      if (response.status === 'completed') {
+        console.log(`AI-powered analysis completed! Found ${response.ai_generated_findings} new findings.`);
       }
     } catch (error) {
       console.error('Dynamic scan error:', error);
-      alert('Dynamic scan failed: ' + (error.response?.data?.detail || error.message));
+      alert('Dynamic scan failed: ' + error.message);
       setDynamicScanning(false);
     }
   };
@@ -89,16 +91,19 @@ const ScanResults = ({ currentScan }) => {
     }
 
     try {
-      const response = await axios.patch(`${API_BASE_URL}/runs/${runId}`, {
-        name: newName.trim()
+      const response = await api(`/runs/${runId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: newName.trim()
+        })
       });
       
-      setScanStatus(response.data);
+      setScanStatus(response);
       setIsRenaming(false);
       setNewName('');
     } catch (error) {
       console.error('Rename error:', error);
-      alert('Failed to rename scan instance: ' + (error.response?.data?.detail || error.message));
+      alert('Failed to rename scan instance: ' + error.message);
     }
   };
 
@@ -109,12 +114,12 @@ const ScanResults = ({ currentScan }) => {
 
     setIsDeleting(true);
     try {
-      await axios.delete(`${API_BASE_URL}/runs/${runId}`);
+      await api(`/runs/${runId}`, { method: 'DELETE' });
       alert('Scan deleted successfully');
       navigate('/runs'); // Redirect to history page
     } catch (error) {
       console.error('Delete error:', error);
-      alert('Failed to delete scan: ' + (error.response?.data?.detail || error.message));
+      alert('Failed to delete scan: ' + error.message);
     } finally {
       setIsDeleting(false);
     }
@@ -122,12 +127,12 @@ const ScanResults = ({ currentScan }) => {
 
   const fetchScanStatus = useCallback(async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/runs/${runId}`);
-      setScanStatus(response.data);
+      const response = await api(`/runs/${runId}`);
+      setScanStatus(response);
       setLoading(false);
     } catch (error) {
       console.error('Failed to fetch scan status:', error);
-      if (error.response?.status === 401) {
+      if (error.message.includes('401') || error.message.includes('unauthorized')) {
         navigate('/login');
       }
       setLoading(false);
@@ -137,12 +142,12 @@ const ScanResults = ({ currentScan }) => {
   const fetchFindings = useCallback(async () => {
     try {
       console.log(`🔍 Fetching findings for run ${runId}`);
-      const response = await axios.get(`${API_BASE_URL}/runs/${runId}/findings`);
-      console.log(`✅ Found ${response.data.length} findings:`, response.data.slice(0, 3));
-      setFindings(response.data);
+      const response = await api(`/runs/${runId}/findings`);
+      console.log(`✅ Found ${response.length} findings:`, response.slice(0, 3));
+      setFindings(response);
     } catch (error) {
       console.error('Failed to fetch findings:', error);
-      if (error.response?.status === 401) {
+      if (error.message.includes('401') || error.message.includes('unauthorized')) {
         navigate('/login');
       }
     }
@@ -166,7 +171,7 @@ const ScanResults = ({ currentScan }) => {
     fetchFindings();
 
     // Set up SSE for real-time updates
-    const eventSource = new EventSource(`${API_BASE_URL}/runs/${runId}/stream`, { withCredentials: true });
+    const eventSource = new EventSource(`${process.env.REACT_APP_API_URL || "http://localhost:8000"}/runs/${runId}/stream`, { withCredentials: true });
 
     eventSource.onmessage = async (event) => {
       const data = JSON.parse(event.data);
@@ -244,8 +249,8 @@ const ScanResults = ({ currentScan }) => {
 
   const handleReplay = async (findingId) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/runs/${runId}/findings/${findingId}/replay`);
-      alert('Replay completed: ' + response.data.message);
+      const response = await api(`/runs/${runId}/findings/${findingId}/replay`, { method: 'POST' });
+      alert('Replay completed: ' + response.message);
     } catch (error) {
       console.error('Failed to replay finding:', error);
       alert('Failed to replay finding');
@@ -255,12 +260,13 @@ const ScanResults = ({ currentScan }) => {
   // Show "No Scans Found" message when no runId and no current scan
   if (!runId && !currentScan) {
     return (
-      <motion.div 
-        className="px-4 py-6" 
-        initial={{ opacity: 0, y: 20 }} 
-        animate={{ opacity: 1, y: 0 }} 
-        transition={{ duration: 0.5 }}
-      >
+      <div className="h-screen overflow-y-auto">
+        <motion.div 
+          className="px-4 py-6" 
+          initial={{ opacity: 0, y: 20 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          transition={{ duration: 0.5 }}
+        >
         {/* Header */}
         <motion.div
           className="glass-card p-8 mb-8 rounded-2xl"
@@ -325,13 +331,15 @@ const ScanResults = ({ currentScan }) => {
             </motion.button>
           </div>
         </motion.div>
-      </motion.div>
+        </motion.div>
+      </div>
     )
   }
 
   if (loading) {
     return (
-      <motion.div className="flex items-center justify-center h-64" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <div className="h-screen overflow-y-auto">
+        <motion.div className="flex items-center justify-center h-64" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
         <div className="text-center">
           <motion.div
             animate={{ rotate: 360 }}
@@ -341,22 +349,26 @@ const ScanResults = ({ currentScan }) => {
           </motion.div>
           <p className="text-muted-foreground text-lg">Loading scan results...</p>
         </div>
-      </motion.div>
+        </motion.div>
+      </div>
     )
   }
 
   if (!scanStatus) {
     return (
-      <motion.div className="text-center py-12" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <AlertTriangle className="h-16 w-16 text-red-400 mx-auto mb-4" />
-        <h2 className="text-2xl font-bold text-foreground mb-2">Scan Not Found</h2>
-        <p className="text-muted-foreground">The scan you're looking for doesn't exist.</p>
-      </motion.div>
+      <div className="h-screen overflow-y-auto">
+        <motion.div className="text-center py-12" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+          <AlertTriangle className="h-16 w-16 text-red-400 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-foreground mb-2">Scan Not Found</h2>
+          <p className="text-muted-foreground">The scan you're looking for doesn't exist.</p>
+        </motion.div>
+      </div>
     )
   }
 
   return (
-    <motion.div className="px-4 py-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
+    <div className="h-screen overflow-y-auto">
+      <motion.div className="px-4 py-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
       {/* Scan Status Header */}
       <motion.div
         className="glass-card p-8 mb-8 rounded-2xl"
@@ -820,7 +832,8 @@ const ScanResults = ({ currentScan }) => {
           </div>
         </motion.div>
       )}
-    </motion.div>
+      </motion.div>
+    </div>
   );
 };
 

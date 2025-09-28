@@ -9,10 +9,13 @@ import {
   ExternalLink,
   Code,
   Shield,
-  Zap
+  Zap,
+  LogOut,
+  User,
+  Repository
 } from 'lucide-react';
 
-const GitHubIntegration = ({ onTestGenerated, onError }) => {
+const GitHubIntegration = ({ onTestGenerated, onError, onRepositorySelected }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [repositories, setRepositories] = useState([]);
@@ -20,6 +23,7 @@ const GitHubIntegration = ({ onTestGenerated, onError }) => {
   const [testRequest, setTestRequest] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
+  const [userInfo, setUserInfo] = useState(null);
 
   // Check GitHub connection status
   useEffect(() => {
@@ -40,6 +44,7 @@ const GitHubIntegration = ({ onTestGenerated, onError }) => {
           const data = await response.json();
           setIsConnected(data.connected);
           setRepositories(data.repositories || []);
+          setUserInfo(data.user || null);
           setConnectionStatus(data.connected ? 'connected' : 'disconnected');
           
           // Store state for future API calls
@@ -54,6 +59,7 @@ const GitHubIntegration = ({ onTestGenerated, onError }) => {
             const data = await response.json();
             setIsConnected(data.connected);
             setRepositories(data.repositories || []);
+            setUserInfo(data.user || null);
             setConnectionStatus(data.connected ? 'connected' : 'disconnected');
           }
         }
@@ -121,6 +127,31 @@ const GitHubIntegration = ({ onTestGenerated, onError }) => {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const signOut = () => {
+    // Clear all GitHub-related data
+    localStorage.removeItem('github_state');
+    setIsConnected(false);
+    setRepositories([]);
+    setSelectedRepo('');
+    setTestRequest('');
+    setUserInfo(null);
+    setConnectionStatus('disconnected');
+    
+    // Clear URL parameters
+    const url = new URL(window.location);
+    url.searchParams.delete('github_connected');
+    url.searchParams.delete('state');
+    window.history.replaceState({}, '', url);
+    
+    // Notify parent component
+    onRepositorySelected && onRepositorySelected(null);
+  };
+
+  const handleRepositoryChange = (repo) => {
+    setSelectedRepo(repo);
+    onRepositorySelected && onRepositorySelected(repo);
   };
 
   const triggerGitHubWorkflow = async () => {
@@ -203,9 +234,28 @@ const GitHubIntegration = ({ onTestGenerated, onError }) => {
             <Github className="h-6 w-6 text-primary" />
             <h3 className="text-lg font-semibold text-foreground">GitHub Integration</h3>
           </div>
-          <div className="flex items-center space-x-2">
-            {getStatusIcon()}
-            <span className="text-sm text-muted-foreground">{getStatusText()}</span>
+          <div className="flex items-center space-x-3">
+            {isConnected && userInfo && (
+              <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                <User className="h-4 w-4" />
+                <span>{userInfo.login}</span>
+              </div>
+            )}
+            <div className="flex items-center space-x-2">
+              {getStatusIcon()}
+              <span className="text-sm text-muted-foreground">{getStatusText()}</span>
+            </div>
+            {isConnected && (
+              <motion.button
+                onClick={signOut}
+                className="p-2 text-muted-foreground hover:text-foreground transition-colors glass-card rounded-lg"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                title="Sign out"
+              >
+                <LogOut className="h-4 w-4" />
+              </motion.button>
+            )}
           </div>
         </div>
 
@@ -238,7 +288,7 @@ const GitHubIntegration = ({ onTestGenerated, onError }) => {
               </label>
               <select
                 value={selectedRepo}
-                onChange={(e) => setSelectedRepo(e.target.value)}
+                onChange={(e) => handleRepositoryChange(e.target.value)}
                 className="w-full px-4 py-3 glass-card border border-border/50 rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
               >
                 <option value="">Choose a repository...</option>

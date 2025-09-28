@@ -6,7 +6,7 @@ import { Settings, AlertTriangle, Play, Save, FolderOpen, Download, Upload } fro
 import BlockCanvas from "./BlockCanvas"
 import BlockPalette from "./BlockPalette"
 import BlockPropertiesModal from "./BlockPropertiesModal"
-import axios from "axios"
+import { api } from "../lib/api"
 
 const BuildScreen = () => {
   const [blocks, setBlocks] = useState([])
@@ -129,15 +129,18 @@ const BuildScreen = () => {
         }
       }
 
-      const response = await axios.post("/api/orchestrator/run", projectData)
+      const response = await api("/api/orchestrator/run", {
+        method: "POST",
+        body: JSON.stringify(projectData)
+      })
       
-      if (response.data.scanId) {
+      if (response.scanId) {
         // Navigate to scan results
-        window.location.href = `/scan/${response.data.scanId}`
+        window.location.href = `/scan/${response.scanId}`
       }
     } catch (error) {
       console.error("Failed to start scan:", error)
-      alert("Failed to start scan: " + (error.response?.data?.detail || error.message))
+      alert("Failed to start scan: " + error.message)
     } finally {
       setIsLoading(false)
     }

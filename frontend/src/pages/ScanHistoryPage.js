@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react"
 import { useNavigate, Link } from "react-router-dom"
-import axios from "axios"
+import { api } from "../lib/api"
 import { motion } from "framer-motion"
 import { History, RefreshCw, ArrowRight, AlertTriangle, Clock, Search, Filter, X, Trash2 } from "lucide-react"
 
@@ -58,14 +58,14 @@ const ScanHistoryPage = () => {
         params.append('status', statusFilter)
       }
       
-      const response = await axios.get(`/runs?${params.toString()}`)
-      setRuns(Array.isArray(response.data) ? response.data : [])
+      const response = await api(`/runs?${params.toString()}`)
+      setRuns(Array.isArray(response) ? response : [])
     } catch (err) {
-      if (err.response?.status === 401) {
+      if (err.message.includes('401') || err.message.includes('unauthorized')) {
         navigate("/login")
         return
       }
-      setError(err.response?.data?.detail || "Unable to load scan history")
+      setError(err.message || "Unable to load scan history")
     } finally {
       setLoading(false)
       setIsRefreshing(false)
@@ -104,12 +104,12 @@ const ScanHistoryPage = () => {
 
     setDeletingRunId(runId)
     try {
-      await axios.delete(`/runs/${runId}`)
+      await api(`/runs/${runId}`, { method: 'DELETE' })
       // Remove the deleted run from the local state
       setRuns(runs.filter(run => run.id !== runId))
     } catch (error) {
       console.error('Delete error:', error)
-      alert('Failed to delete scan: ' + (error.response?.data?.detail || error.message))
+      alert('Failed to delete scan: ' + error.message)
     } finally {
       setDeletingRunId(null)
     }
