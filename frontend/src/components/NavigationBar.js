@@ -245,7 +245,7 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
   return (
     <>
       <motion.header
-        className="glass-card border-b border-border/50 relative z-10"
+        className="glass-card no-contain border-b border-border/50 relative z-30"
         initial={{ y: -100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
@@ -330,7 +330,7 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
                   {showResultsDropdown && !resultsDisabled && (
                     <motion.div
                       key="results-dropdown"
-                      className="absolute right-0 mt-3 w-80 glass-card border border-border/50 rounded-xl shadow-2xl overflow-hidden"
+                      className="absolute right-0 mt-3 w-80 glass-card no-contain border border-border/50 rounded-xl shadow-2xl overflow-hidden z-40"
                       initial={{ opacity: 0, y: -8 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -8 }}
@@ -450,7 +450,7 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
                     Dashboard
                   </Link>
 
-                  <div className="glass-card border border-border/50 rounded-lg">
+                  <div className="glass-card no-contain border border-border/50 rounded-lg">
                     <button
                       type="button"
                       onClick={handleToggleMobileResults}
