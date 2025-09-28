@@ -35,8 +35,11 @@ async def prepare_scan_digest(run_id: str) -> Dict[str, Any]:
     severity_totals: Dict[str, int] = {}
     highest_severity: Optional[str] = None
 
+    findings_payload = []
+
     for finding in findings:
-        severity = finding.severity.lower()
+        severity_value = getattr(finding, "severity", "") or ""
+        severity = severity_value.lower() if isinstance(severity_value, str) else str(severity_value).lower()
         severity_totals[severity] = severity_totals.get(severity, 0) + 1
         if highest_severity is None:
             highest_severity = severity
@@ -46,11 +49,32 @@ async def prepare_scan_digest(run_id: str) -> Dict[str, Any]:
             if new_index < current_index:
                 highest_severity = severity
 
+        findings_payload.append(
+            {
+                "id": finding.id,
+                "category": finding.category,
+                "title": finding.title,
+                "severity": severity_value,
+                "description": finding.description,
+                "evidence": finding.evidence,
+                "fix_snippet": finding.fix_snippet,
+                "reproduce_command": finding.reproduce_command,
+                "priority_score": finding.priority_score,
+                "created_at": finding.created_at.isoformat() if finding.created_at else None,
+            }
+        )
+
+    status_value = getattr(run, "status", ScanStatus.COMPLETED.value)
+    if isinstance(status_value, ScanStatus):
+        status_value = status_value.value
+
+    risk_score = getattr(run, "risk_score", 0) or 0
+
     digest: Dict[str, Any] = {
         "run_id": run.id,
         "target_url": run.target_url,
-        "status": run.status,
-        "risk_score": run.risk_score,
+        "status": status_value,
+        "risk_score": risk_score,
         "created_at": run.created_at.isoformat() if run.created_at else None,
         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
         "finding_count": len(findings),
@@ -59,21 +83,7 @@ async def prepare_scan_digest(run_id: str) -> Dict[str, Any]:
         "notify_email": _coalesce_notify_email(getattr(run, "notify_email", None)),
         "consent_ip": getattr(run, "consent_ip", None),
         "max_pages": getattr(run, "max_pages", None),
-        "findings": [
-            {
-                "id": finding.id,
-                "category": finding.category,
-                "title": finding.title,
-                "severity": finding.severity,
-                "description": finding.description,
-                "evidence": finding.evidence,
-                "fix_snippet": finding.fix_snippet,
-                "reproduce_command": finding.reproduce_command,
-                "priority_score": finding.priority_score,
-                "created_at": finding.created_at.isoformat() if finding.created_at else None,
-            }
-            for finding in findings
-        ],
+        "findings": findings_payload,
     }
 
     return digest
