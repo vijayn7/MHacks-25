@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { useParams, useNavigate } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import axios from "axios"
 import {
@@ -19,6 +19,7 @@ import {
   Settings,
   Play,
 } from "lucide-react"
+import { API_BASE_URL } from "../lib/api"
 
 
 const ScanResults = ({ currentScan }) => {
@@ -71,9 +72,12 @@ const ScanResults = ({ currentScan }) => {
       setLoading(false);
     } catch (error) {
       console.error('Failed to fetch scan status:', error);
+      if (error.response?.status === 401) {
+        navigate('/login');
+      }
       setLoading(false);
     }
-  }, [runId]);
+  }, [navigate, runId]);
 
   const fetchFindings = useCallback(async () => {
     try {
@@ -83,8 +87,11 @@ const ScanResults = ({ currentScan }) => {
       setFindings(response.data);
     } catch (error) {
       console.error('Failed to fetch findings:', error);
+      if (error.response?.status === 401) {
+        navigate('/login');
+      }
     }
-  }, [runId]);
+  }, [navigate, runId]);
 
   useEffect(() => {
     // If we're on /results route without a runId, check for current scan
@@ -104,7 +111,7 @@ const ScanResults = ({ currentScan }) => {
     fetchFindings();
 
     // Set up SSE for real-time updates
-    const eventSource = new EventSource(`http://localhost:8000/runs/${runId}/stream`);
+    const eventSource = new EventSource(`${API_BASE_URL}/runs/${runId}/stream`, { withCredentials: true });
 
     eventSource.onmessage = async (event) => {
       const data = JSON.parse(event.data);
@@ -148,7 +155,7 @@ const ScanResults = ({ currentScan }) => {
       eventSource.close();
     };
 
-  }, [runId]);
+  }, [runId, fetchFindings, fetchScanStatus]);
 
   const getSeverityColor = (severity) => {
     switch (severity) {

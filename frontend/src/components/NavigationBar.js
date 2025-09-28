@@ -1,22 +1,26 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { Shield, Play, AlertTriangle, Settings, Search } from "lucide-react"
+import { Shield, Play, AlertTriangle, LogOut, User } from "lucide-react"
 
-const NavigationBar = ({ currentScan, onNewScan }) => {
+const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = false }) => {
   const location = useLocation()
   const navigate = useNavigate()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+  const isAuthenticated = Boolean(user)
+  const canStartScan = isAuthenticated && !authLoading
+  const resultsDisabled = !isAuthenticated || authLoading
 
-  // Check if we're currently on a scan results page
-  const isOnScanResults = location.pathname.startsWith("/scan/")
+  useEffect(() => {
+    setIsMenuOpen(false)
+  }, [location.pathname])
 
   const navItems = [
     { name: "Dashboard", path: "/" },
-    { name: "Results", path: "/results" },
+    { name: "Results", path: "/runs" },
     { name: "Build", path: "/build" }
   ]
 
@@ -24,8 +28,8 @@ const NavigationBar = ({ currentScan, onNewScan }) => {
     if (path === "/") {
       return location.pathname === "/"
     }
-    if (path === "/results") {
-      return location.pathname === "/results" || location.pathname.startsWith("/scan/")
+    if (path === "/runs") {
+      return location.pathname === "/runs" || location.pathname.startsWith("/scan/")
     }
     if (path === "/build") {
       return location.pathname === "/build"
@@ -34,11 +38,16 @@ const NavigationBar = ({ currentScan, onNewScan }) => {
   }
 
   const handleNewScanClick = () => {
-    // If there's an active scan, show confirmation dialog
+    if (!canStartScan) {
+      if (!authLoading) {
+        navigate("/login")
+      }
+      return
+    }
+
     if (currentScan && (currentScan.status === "running" || currentScan.status === "completed")) {
       setShowConfirmDialog(true)
     } else {
-      // No active scan, go directly to dashboard
       navigate("/")
     }
   }
@@ -46,7 +55,6 @@ const NavigationBar = ({ currentScan, onNewScan }) => {
   const handleConfirmNewScan = () => {
     setShowConfirmDialog(false)
     navigate("/")
-    // Call the onNewScan callback to reset the current scan state
     if (onNewScan) {
       onNewScan()
     }
@@ -56,10 +64,26 @@ const NavigationBar = ({ currentScan, onNewScan }) => {
     setShowConfirmDialog(false)
   }
 
+  const handleLogoutClick = async () => {
+    if (onLogout) {
+      await onLogout()
+      setIsMenuOpen(false)
+    }
+  }
+
+  const handleResultsClick = (event) => {
+    if (resultsDisabled) {
+      event.preventDefault()
+      if (!authLoading) {
+        navigate("/login")
+      }
+    }
+  }
+
   return (
     <>
       <motion.header
-        className="glass-card border-b border-border/50 relative z-10"
+        className="glass-card no-contain border-b border-border/50 relative z-30"
         initial={{ y: -100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
@@ -94,8 +118,13 @@ const NavigationBar = ({ currentScan, onNewScan }) => {
                 <Link
                   key={item.name}
                   to={item.path}
+                  onClick={item.name === "Results" ? handleResultsClick : undefined}
                   className={`relative text-sm font-medium transition-colors duration-200 ${
-                    isActive(item.path)
+                    item.name === "Results" && resultsDisabled
+                      ? "text-foreground/30 cursor-not-allowed"
+                      : item.name === "Dashboard" && (!isAuthenticated || authLoading)
+                      ? "text-foreground/30 cursor-not-allowed"
+                      : isActive(item.path)
                       ? "text-primary"
                       : "text-foreground/70 hover:text-foreground"
                   }`}
@@ -113,16 +142,51 @@ const NavigationBar = ({ currentScan, onNewScan }) => {
               ))}
             </nav>
 
-            {/* CTA Button */}
-            <motion.button
-              onClick={handleNewScanClick}
-              className="glass-card px-6 py-2 text-sm font-medium text-foreground hover:bg-primary/10 transition-all duration-300 rounded-lg border border-border/50 hover:border-primary/40 flex items-center space-x-2"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <Play className="h-4 w-4" />
-              <span>New Scan</span>
-            </motion.button>
+            {/* Auth Actions */}
+            <div className="hidden md:flex items-center space-x-3">
+              {isAuthenticated ? (
+                <>
+                  <div className="glass-card flex items-center space-x-2 rounded-lg border border-border/50 px-3 py-2 text-xs text-muted-foreground">
+                    <User className="h-4 w-4" />
+                    <span className="font-medium text-foreground/80">{user.email}</span>
+                  </div>
+                  <motion.button
+                    onClick={handleNewScanClick}
+                    disabled={!canStartScan}
+                    className="glass-card px-6 py-2 text-sm font-medium text-foreground hover:bg-primary/10 transition-all duration-300 rounded-lg border border-border/50 hover:border-primary/40 flex items-center space-x-2 disabled:opacity-50"
+                    whileHover={{ scale: canStartScan ? 1.05 : 1 }}
+                    whileTap={{ scale: canStartScan ? 0.95 : 1 }}
+                  >
+                    <Play className="h-4 w-4" />
+                    <span>New Scan</span>
+                  </motion.button>
+                  <motion.button
+                    onClick={handleLogoutClick}
+                    className="glass-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted/20 transition-all duration-300 rounded-lg border border-border/50 flex items-center space-x-2"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>Log out</span>
+                  </motion.button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    to="/login"
+                    className="glass-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted/20 transition-all duration-300 rounded-lg border border-border/50"
+                  >
+                    Log in
+                  </Link>
+                  <Link
+                    to="/signup"
+                    className="bg-primary text-primary-foreground px-4 py-2 text-sm font-medium rounded-lg hover:bg-primary/90 transition-all duration-300"
+                  >
+                    Sign up
+                  </Link>
+                </>
+              )}
+            </div>
 
             {/* Mobile Menu Button */}
             <button
@@ -155,32 +219,86 @@ const NavigationBar = ({ currentScan, onNewScan }) => {
           </div>
 
           {/* Mobile Menu */}
-          {isMenuOpen && (
-            <motion.div
-              className="md:hidden py-4 border-t border-border/50"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <div className="flex flex-col space-y-4">
-                {navItems.map((item) => (
-                  <Link
-                    key={item.name}
-                    to={item.path}
-                    className={`text-sm font-medium transition-colors duration-200 ${
-                      isActive(item.path)
-                        ? "text-primary"
-                        : "text-foreground/70 hover:text-foreground"
-                    }`}
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    {item.name}
-                  </Link>
-                ))}
-              </div>
-            </motion.div>
-          )}
+          <AnimatePresence initial={false}>
+            {isMenuOpen && (
+              <motion.div
+                className="md:hidden py-4 border-t border-border/50"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="flex flex-col space-y-4">
+                  {navItems.map((item) => (
+                    <Link
+                      key={item.name}
+                      to={item.path}
+                      onClick={(event) => {
+                        if (item.name === "Results") {
+                          handleResultsClick(event)
+                          if (!resultsDisabled) {
+                            setIsMenuOpen(false)
+                          }
+                        } else if (item.name === "Dashboard") {
+                          if (isAuthenticated && !authLoading) {
+                            setIsMenuOpen(false)
+                          }
+                        } else {
+                          setIsMenuOpen(false)
+                        }
+                      }}
+                      className={`glass-card px-4 py-2 text-sm font-medium border border-border/50 rounded-lg transition-colors ${
+                        item.name === "Results" && resultsDisabled
+                          ? "text-foreground/30 cursor-not-allowed"
+                          : item.name === "Dashboard" && (!isAuthenticated || authLoading)
+                          ? "text-foreground/30 cursor-not-allowed"
+                          : isActive(item.path)
+                          ? "text-primary"
+                          : "text-foreground/70 hover:text-foreground"
+                      }`}
+                    >
+                      {item.name}
+                    </Link>
+                  ))}
+
+                  {isAuthenticated ? (
+                    <>
+                      <button
+                        onClick={handleNewScanClick}
+                        disabled={!canStartScan}
+                        className="glass-card px-4 py-2 text-left text-sm font-medium text-foreground border border-border/50 rounded-lg hover:bg-primary/10 disabled:opacity-50"
+                      >
+                        Start new scan
+                      </button>
+                      <button
+                        onClick={handleLogoutClick}
+                        className="glass-card px-4 py-2 text-left text-sm font-medium text-foreground border border-border/50 rounded-lg hover:bg-muted/20"
+                      >
+                        Log out
+                      </button>
+                    </>
+                  ) : (
+                    <div className="flex flex-col space-y-3">
+                      <Link
+                        to="/login"
+                        className="glass-card px-4 py-2 text-sm font-medium text-foreground border border-border/50 rounded-lg hover:bg-muted/20"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        Log in
+                      </Link>
+                      <Link
+                        to="/signup"
+                        className="bg-primary text-primary-foreground px-4 py-2 text-sm font-medium rounded-lg hover:bg-primary/90"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        Sign up
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </motion.header>
 
@@ -252,4 +370,3 @@ const NavigationBar = ({ currentScan, onNewScan }) => {
 }
 
 export default NavigationBar
-

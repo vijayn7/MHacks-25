@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response, Depends, Cookie, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
@@ -7,10 +7,13 @@ from fastapi.staticfiles import StaticFiles
 import uuid
 import json
 import asyncio
-from datetime import datetime
-from typing import Dict, List
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional
 import os
+import secrets
 from dotenv import load_dotenv
+from pydantic import BaseModel, EmailStr, Field
+from argon2 import PasswordHasher
 
 # Load environment variables
 load_dotenv()
@@ -18,7 +21,8 @@ load_dotenv()
 from database import (
     startup_db, shutdown_db, get_database,
     create_scan_run, get_scan_run, update_scan_run,
-    create_finding, get_findings_by_run, get_finding
+    create_finding, get_findings_by_run, get_finding,
+    get_scan_runs_by_user
 )
 from models import CreateScanRequest, ScanRunResponse, FindingResponse, ScanEvent, ScanStatus
 from agent_mail import dispatch_post_scan_email
@@ -52,14 +56,105 @@ app.mount(
 app.add_event_handler("startup", startup_db)
 app.add_event_handler("shutdown", shutdown_db)
 
+# Configuration
+SESSION_COOKIE = os.getenv("SESSION_COOKIE_NAME", "sid")
+SESSION_TTL_HOURS = int(os.getenv("SESSION_TTL_HOURS", "168"))
+SESSION_TTL = timedelta(hours=SESSION_TTL_HOURS)
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ORIGIN",
+        "http://localhost:3000,http://localhost:3002,http://localhost:5173"
+    ).split(",")
+    if origin.strip()
+]
+COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
+COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "lax")
+
+ph = PasswordHasher()
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3002"],  # React dev server
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class SignupIn(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8)
+    name: Optional[str] = None
+
+
+class LoginIn(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class MeOut(BaseModel):
+    id: str
+    email: EmailStr
+    roles: List[str]
+
+
+async def ensure_auth_indexes():
+    db = await get_database()
+    users_collection = db["users"]
+    sessions_collection = db["sessions"]
+
+    await users_collection.create_index("email", unique=True)
+    await sessions_collection.create_index("token", unique=True)
+    await sessions_collection.create_index("expiresAt", expireAfterSeconds=0)
+
+
+async def startup_auth():
+    await ensure_auth_indexes()
+
+
+app.add_event_handler("startup", startup_auth)
+
+
+def cookie_opts():
+    return {
+        "httponly": True,
+        "secure": COOKIE_SECURE,
+        "samesite": COOKIE_SAMESITE,
+        "path": "/",
+        "max_age": int(SESSION_TTL.total_seconds()),
+    }
+
+
+async def get_current_user(
+    sid: Optional[str] = Cookie(default=None, alias=SESSION_COOKIE)
+):
+    if not sid:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="unauthorized")
+
+    db = await get_database()
+    sessions_collection = db["sessions"]
+    users_collection = db["users"]
+
+    now = datetime.utcnow()
+    session = await sessions_collection.find_one({
+        "token": sid,
+        "expiresAt": {"$gt": now},
+    })
+
+    if not session:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="session_expired")
+
+    user = await users_collection.find_one({"_id": session["userId"]})
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="user_not_found")
+
+    return {
+        "id": str(user["_id"]),
+        "email": user["email"],
+        "roles": user.get("roles", ["user"]),
+    }
 
 # In-memory storage for SSE connections
 active_connections: Dict[str, List] = {}
@@ -101,10 +196,95 @@ async def health_check():
     except Exception as e:
         return {"status": "unhealthy", "error": str(e)}
 
+
+@app.post("/api/auth/signup", status_code=status.HTTP_201_CREATED)
+async def signup(payload: SignupIn, resp: Response):
+    db = await get_database()
+    users_collection = db["users"]
+    sessions_collection = db["sessions"]
+
+    existing = await users_collection.find_one({"email": payload.email.lower()})
+    if existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="email_taken")
+
+    pw_hash = ph.hash(payload.password)
+    user_doc = {
+        "email": payload.email.lower(),
+        "passwordHash": pw_hash,
+        "name": payload.name,
+        "roles": ["user"],
+        "createdAt": datetime.utcnow(),
+    }
+
+    result = await users_collection.insert_one(user_doc)
+
+    token = secrets.token_hex(32)
+    expires_at = datetime.utcnow() + SESSION_TTL
+    await sessions_collection.insert_one({
+        "userId": result.inserted_id,
+        "token": token,
+        "createdAt": datetime.utcnow(),
+        "expiresAt": expires_at,
+    })
+
+    resp.set_cookie(SESSION_COOKIE, token, **cookie_opts())
+    return {"id": str(result.inserted_id), "email": payload.email}
+
+
+@app.post("/api/auth/login")
+async def login(payload: LoginIn, resp: Response):
+    db = await get_database()
+    users_collection = db["users"]
+    sessions_collection = db["sessions"]
+
+    user = await users_collection.find_one({"email": payload.email.lower()})
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid_credentials")
+
+    try:
+        ph.verify(user["passwordHash"], payload.password)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid_credentials")
+
+    token = secrets.token_hex(32)
+    expires_at = datetime.utcnow() + SESSION_TTL
+    await sessions_collection.insert_one({
+        "userId": user["_id"],
+        "token": token,
+        "createdAt": datetime.utcnow(),
+        "expiresAt": expires_at,
+    })
+
+    resp.set_cookie(SESSION_COOKIE, token, **cookie_opts())
+    return {"id": str(user["_id"]), "email": user["email"]}
+
+
+@app.get("/api/auth/me", response_model=MeOut)
+async def me(user=Depends(get_current_user)):
+    return user
+
+
+@app.post("/api/auth/logout")
+async def logout(resp: Response, sid: Optional[str] = Cookie(default=None, alias=SESSION_COOKIE)):
+    if sid:
+        db = await get_database()
+        sessions_collection = db["sessions"]
+        await sessions_collection.delete_one({"token": sid})
+
+    resp.delete_cookie(SESSION_COOKIE, path="/", samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
+    return {"ok": True}
+
+
+@app.get("/api/secret")
+async def secret(user=Depends(get_current_user)):
+    return {"message": f"Hi {user['email']}, only authed users see this."}
+
+
 @app.post("/runs", response_model=dict)
 async def create_scan(
     scan_request: CreateScanRequest,
-    request: Request
+    request: Request,
+    user=Depends(get_current_user)
 ):
     if not scan_request.consent:
         raise HTTPException(status_code=400, detail="Consent is required to start a scan")
@@ -121,6 +301,7 @@ async def create_scan(
         "max_pages": scan_request.max_pages,
         "notify_email": notify_email,
         "consent_ip": request.client.host,
+        "user_id": user["id"],
     }
 
     scan_run = await create_scan_run(scan_data)
@@ -133,10 +314,35 @@ async def create_scan(
 
     return {"run_id": run_id, "status": "queued"}
 
+@app.get("/runs", response_model=List[ScanRunResponse])
+async def list_scan_runs(user=Depends(get_current_user)):
+    runs = await get_scan_runs_by_user(user["id"])
+
+    responses = []
+    for run in runs:
+        findings = await get_findings_by_run(run.id)
+        responses.append(
+            ScanRunResponse(
+                id=run.id,
+                target_url=run.target_url,
+                status=run.status,
+                created_at=run.created_at,
+                completed_at=run.completed_at,
+                risk_score=run.risk_score,
+                finding_count=len(findings)
+            )
+        )
+
+    return responses
+
+
 @app.get("/runs/{run_id}", response_model=ScanRunResponse)
-async def get_scan_status(run_id: str):
+async def get_scan_status(run_id: str, user=Depends(get_current_user)):
     scan_run = await get_scan_run(run_id)
     if not scan_run:
+        raise HTTPException(status_code=404, detail="Scan run not found")
+
+    if scan_run.user_id != user["id"]:
         raise HTTPException(status_code=404, detail="Scan run not found")
 
     findings = await get_findings_by_run(run_id)
@@ -153,7 +359,11 @@ async def get_scan_status(run_id: str):
     )
 
 @app.get("/runs/{run_id}/findings", response_model=List[FindingResponse])
-async def get_scan_findings(run_id: str):
+async def get_scan_findings(run_id: str, user=Depends(get_current_user)):
+    scan_run = await get_scan_run(run_id)
+    if not scan_run or scan_run.user_id != user["id"]:
+        raise HTTPException(status_code=404, detail="Scan run not found")
+
     findings = await get_findings_by_run(run_id)
 
     return [
@@ -174,10 +384,10 @@ async def get_scan_findings(run_id: str):
     ]
 
 @app.get("/runs/{run_id}/stream")
-async def stream_scan_events(run_id: str):
+async def stream_scan_events(run_id: str, user=Depends(get_current_user)):
     # Verify run exists
     scan_run = await get_scan_run(run_id)
-    if not scan_run:
+    if not scan_run or scan_run.user_id != user["id"]:
         raise HTTPException(status_code=404, detail="Scan run not found")
 
     async def event_generator():

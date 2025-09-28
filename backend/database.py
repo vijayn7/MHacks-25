@@ -25,6 +25,7 @@ class ScanRun(Document):
     notify_email: Optional[str] = None
     max_pages: int = 30
     risk_score: int = 0
+    user_id: Optional[str] = None
 
     class Settings:
         name = "scan_runs"
@@ -120,6 +121,15 @@ async def create_scan_run(scan_data: dict) -> ScanRun:
 async def get_scan_run(run_id: str) -> Optional[ScanRun]:
     """Get scan run by ID"""
     return await ScanRun.find_one(ScanRun.id == run_id)
+
+async def get_scan_runs_by_user(user_id: str) -> List[ScanRun]:
+    """Get all scan runs that belong to a specific user"""
+    runs = await ScanRun.find(ScanRun.user_id == user_id).to_list()
+
+    # Sort newest first for easier display in the UI
+    runs.sort(key=lambda run: run.created_at, reverse=True)
+
+    return runs
 
 async def update_scan_run(run_id: str, update_data: dict) -> Optional[ScanRun]:
     """Update scan run"""
