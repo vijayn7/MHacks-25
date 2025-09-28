@@ -110,14 +110,15 @@ function App() {
                 }
               />
               <Route
-                path="/build"
+                path="/blocks"
                 element={
                   <motion.div
-                    key="build"
+                    key="blocks"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
                     transition={{ duration: 0.5 }}
+                    className="h-screen"
                   >
                     <BuildScreen />
                   </motion.div>

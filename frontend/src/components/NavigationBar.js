@@ -17,7 +17,7 @@ const NavigationBar = ({ currentScan, onNewScan }) => {
   const navItems = [
     { name: "Dashboard", path: "/" },
     { name: "Results", path: "/results" },
-    { name: "Build", path: "/build" }
+    { name: "Blocks", path: "/blocks" }
   ]
 
   const isActive = (path) => {
@@ -27,8 +27,8 @@ const NavigationBar = ({ currentScan, onNewScan }) => {
     if (path === "/results") {
       return location.pathname === "/results" || location.pathname.startsWith("/scan/")
     }
-    if (path === "/build") {
-      return location.pathname === "/build"
+    if (path === "/blocks") {
+      return location.pathname === "/blocks"
     }
     return location.pathname === path
   }
