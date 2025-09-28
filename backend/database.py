@@ -137,8 +137,16 @@ async def create_finding(finding_data: dict) -> Finding:
     return finding
 
 async def get_findings_by_run(run_id: str) -> List[Finding]:
-    """Get all findings for a scan run"""
-    return await Finding.find(Finding.run_id == run_id).sort(-Finding.priority_score).to_list()
+    """Get all findings for a scan run, sorted by severity (critical to low) and then by priority score"""
+    findings = await Finding.find(Finding.run_id == run_id).to_list()
+    
+    # Define severity order for sorting
+    severity_order = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+    
+    # Sort by severity first (descending), then by priority score (descending)
+    findings.sort(key=lambda f: (severity_order.get(f.severity, 0), f.priority_score), reverse=True)
+    
+    return findings
 
 async def get_finding(finding_id: str) -> Optional[Finding]:
     """Get finding by ID"""

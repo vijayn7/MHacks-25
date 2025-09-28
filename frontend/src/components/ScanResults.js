@@ -160,10 +160,14 @@ const ScanResults = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-6">
             <motion.div
-              className="w-16 h-16 bg-primary/20 rounded-xl flex items-center justify-center"
+              className="w-16 h-16 bg-primary/20 rounded-xl flex items-center justify-center overflow-hidden"
               whileHover={{ scale: 1.1, rotate: 5 }}
             >
-              <Target className="h-8 w-8 text-primary" />
+              <img 
+                src="/Favicon.png" 
+                alt="Swarm Logo" 
+                className="w-10 h-10 object-contain"
+              />
             </motion.div>
             <div>
               <h1 className="text-3xl font-bold text-foreground mb-2">Security Scan Results</h1>

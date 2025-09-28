@@ -24,10 +24,14 @@ const ConsentModal = ({ isOpen, onAccept, onDecline, targetUrl }) => {
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center space-x-4">
                   <motion.div
-                    className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center"
+                    className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center overflow-hidden"
                     whileHover={{ scale: 1.1, rotate: 5 }}
                   >
-                    <Shield className="h-6 w-6 text-primary" />
+                    <img 
+                      src="/Favicon.png" 
+                      alt="Swarm Logo" 
+                      className="w-8 h-8 object-contain"
+                    />
                   </motion.div>
                   <h2 className="text-2xl font-bold text-foreground">Security Scan Authorization</h2>
                 </div>

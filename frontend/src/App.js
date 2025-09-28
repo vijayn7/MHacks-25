@@ -85,13 +85,17 @@ function App() {
                 transition={{ type: "spring", stiffness: 400, damping: 10 }}
               >
                 <div className="flex-shrink-0 mr-4">
-                  {/* Logo Placeholder */}
+                  {/* Logo */}
                   <motion.div
-                    className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center glass-card pulse-glow"
+                    className="w-12 h-12 rounded-xl flex items-center justify-center glass-card pulse-glow overflow-hidden"
                     whileHover={{ scale: 1.1 }}
                     transition={{ type: "spring", stiffness: 400, damping: 10 }}
                   >
-                    <Shield className="h-6 w-6 text-primary" />
+                    <img 
+                      src="/Favicon.png" 
+                      alt="Swarm Logo" 
+                      className="w-8 h-8 object-contain"
+                    />
                   </motion.div>
                 </div>
                 <div>

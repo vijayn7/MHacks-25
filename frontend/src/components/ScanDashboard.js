@@ -66,11 +66,15 @@ const ScanDashboard = ({ onStartScan }) => {
       {/* Hero Section */}
       <motion.div className="text-center mb-16" variants={itemVariants}>
         <motion.div
-          className="inline-flex items-center justify-center w-24 h-24 glass-card rounded-2xl mb-8 pulse-glow"
+          className="inline-flex items-center justify-center w-24 h-24 glass-card rounded-2xl mb-8 pulse-glow overflow-hidden"
           whileHover={{ scale: 1.1, rotate: 5 }}
           transition={{ type: "spring", stiffness: 400, damping: 10 }}
         >
-          <Shield className="h-12 w-12 text-primary" />
+          <img 
+            src="/Favicon.png" 
+            alt="Swarm Logo" 
+            className="w-16 h-16 object-contain"
+          />
         </motion.div>
 
         <motion.h1 className="text-6xl font-bold mb-6 text-balance" variants={itemVariants}>

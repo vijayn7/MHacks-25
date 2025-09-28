@@ -439,26 +439,24 @@ async def run_real_scanners(run_id: str, target_url: str):
                     
                     # Extract findings from the report
                     all_findings = []
-                    scanner_findings = report_data.get('scanner_findings', {})
-                    print(f"🔍 Found {len(scanner_findings)} scanner result sets")
+                    findings_data = report_data.get('all_findings', [])
+                    print(f"🔍 Found {len(findings_data)} total findings in comprehensive report")
                     
-                    for scanner_name, findings in scanner_findings.items():
-                        print(f"🔍 Processing {len(findings)} findings from {scanner_name}")
-                        for finding_data in findings:
-                            # Convert scanner format to database format
-                            db_finding = {
-                                "id": finding_data.get("id", str(uuid.uuid4())[:8]),
-                                "run_id": run_id,
-                                "category": finding_data.get("owasp_category", "unknown"),
-                                "severity": finding_data.get("severity", "medium"),
-                                "title": finding_data.get("title", "Security Issue"),
-                                "description": finding_data.get("description", "No description available"),
-                                "evidence": finding_data.get("evidence", {}),
-                                "fix_snippet": finding_data.get("fix_snippet", ""),
-                                "reproduce_command": finding_data.get("reproduce_command", ""),
-                                "priority_score": finding_data.get("priority_score", 50)
-                            }
-                            all_findings.append(db_finding)
+                    for finding_data in findings_data:
+                        # Convert scanner format to database format
+                        db_finding = {
+                            "id": finding_data.get("id", str(uuid.uuid4())[:8]),
+                            "run_id": run_id,
+                            "category": finding_data.get("category", "unknown"),
+                            "severity": finding_data.get("severity", "medium"),
+                            "title": finding_data.get("title", "Security Issue"),
+                            "description": finding_data.get("description", "No description available"),
+                            "evidence": finding_data.get("evidence", {}),
+                            "fix_snippet": finding_data.get("fix_snippet", ""),
+                            "reproduce_command": finding_data.get("reproduce_command", ""),
+                            "priority_score": finding_data.get("priority_score", 50)
+                        }
+                        all_findings.append(db_finding)
 
                     print(f"✅ Total findings to store: {len(all_findings)}")
                     
