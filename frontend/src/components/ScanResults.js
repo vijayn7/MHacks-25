@@ -15,7 +15,6 @@ import {
   CheckCircle,
   ExternalLink,
   Activity,
-  Target,
 } from "lucide-react"
 
 const ScanResults = () => {
@@ -27,46 +26,7 @@ const ScanResults = () => {
   const [events, setEvents] = useState([]);
   const [codebasePath, setCodebasePath] = useState('');
   const [dynamicScanning, setDynamicScanning] = useState(false);
-
-  useEffect(() => {
-    if (!runId) return;
-
-    // Fetch initial scan status and findings
-    fetchScanStatus();
-    fetchFindings();
-
-    // Set up SSE for real-time updates
-    const eventSource = new EventSource(`http://localhost:8000/runs/${runId}/stream`);
-
-    eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      setEvents(prev => [...prev, data]);
-
-      if (data.event_type === 'status_update') {
-        setScanStatus(prev => ({ ...prev, status: data.data.status }));
-      } else if (data.event_type === 'finding_discovered') {
-        fetchFindings(); // Refresh findings when new one is discovered
-      } else if (data.event_type === 'scan_completed') {
-        fetchScanStatus();
-        fetchFindings();
-      } else if (data.event_type === 'dynamic_scan_completed') {
-        setDynamicScanning(false);
-        fetchFindings(); // Refresh findings to show AI-generated ones
-      } else if (data.event_type === 'dynamic_scan_error') {
-        setDynamicScanning(false);
-        alert('AI-powered analysis failed: ' + data.data.error);
-      }
-    };
-
-    eventSource.onerror = (error) => {
-      console.error('SSE error:', error);
-    };
-
-    return () => {
-      eventSource.close();
-    };
-
-  }, [runId]);
+  const [newAIFindings, setNewAIFindings] = useState(0);
 
   const fetchScanStatus = async () => {
     try {
@@ -89,6 +49,54 @@ const ScanResults = () => {
       console.error('Failed to fetch findings:', error);
     }
   };
+
+  useEffect(() => {
+    if (!runId) return;
+
+    // Fetch initial scan status and findings
+    fetchScanStatus();
+    fetchFindings();
+
+    // Set up SSE for real-time updates
+    const eventSource = new EventSource(`http://localhost:8000/runs/${runId}/stream`);
+
+    eventSource.onmessage = async (event) => {
+      const data = JSON.parse(event.data);
+      setEvents(prev => [...prev, data]);
+
+      if (data.event_type === 'status_update') {
+        setScanStatus(prev => ({ ...prev, status: data.data.status }));
+      } else if (data.event_type === 'finding_discovered') {
+        // Check if it's an AI-generated finding
+        if (data.data.ai_generated) {
+          setNewAIFindings(prev => prev + 1);
+        }
+        fetchFindings(); // Refresh findings when new one is discovered
+      } else if (data.event_type === 'scan_completed') {
+        fetchScanStatus();
+        fetchFindings();
+      } else if (data.event_type === 'dynamic_scan_completed') {
+        setDynamicScanning(false);
+        setNewAIFindings(0); // Reset counter
+        // Auto-refresh findings to show AI-generated ones
+        await fetchFindings();
+        console.log(`✅ AI analysis completed! Found ${data.data.ai_generated_findings} new findings.`);
+      } else if (data.event_type === 'dynamic_scan_error') {
+        setDynamicScanning(false);
+        setNewAIFindings(0); // Reset counter
+        alert('AI-powered analysis failed: ' + data.data.error);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error('SSE error:', error);
+    };
+
+    return () => {
+      eventSource.close();
+    };
+
+  }, [runId, fetchScanStatus, fetchFindings]);
 
   const getSeverityColor = (severity) => {
     switch (severity) {
@@ -138,6 +146,7 @@ const ScanResults = () => {
 
     try {
       setDynamicScanning(true);
+      setNewAIFindings(0); // Reset counter for new analysis
       const response = await axios.post(`http://localhost:8000/runs/${runId}/dynamic-scan`, {
         codebase_path: codebasePath.trim()
       });
@@ -269,6 +278,11 @@ const ScanResults = () => {
                   <RefreshCw className="h-4 w-4" />
                 </motion.div>
                 <span>Analyzing...</span>
+                {newAIFindings > 0 && (
+                  <span className="ml-2 px-2 py-1 bg-green-500 text-white text-xs rounded-full">
+                    +{newAIFindings} found
+                  </span>
+                )}
               </>
             ) : (
               <>
@@ -283,6 +297,16 @@ const ScanResults = () => {
           <p>🤖 Uses Gemini AI to generate targeted security tests based on your actual code patterns</p>
           <p>🎯 Covers 8 attack categories with 50+ sophisticated attack vectors</p>
           <p>⚡ Results appear in real-time below with traditional findings</p>
+          {newAIFindings > 0 && (
+            <motion.p 
+              className="text-green-400 font-medium"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+            >
+              ✅ {newAIFindings} AI-generated findings discovered and added to the list below!
+            </motion.p>
+          )}
         </div>
       </motion.div>
 
