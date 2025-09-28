@@ -21,7 +21,8 @@ load_dotenv()
 from database import (
     startup_db, shutdown_db, get_database,
     create_scan_run, get_scan_run, update_scan_run,
-    create_finding, get_findings_by_run, get_finding
+    create_finding, get_findings_by_run, get_finding,
+    get_scan_runs_by_user
 )
 from models import CreateScanRequest, ScanRunResponse, FindingResponse, ScanEvent, ScanStatus
 from agent_mail import dispatch_post_scan_email
@@ -295,6 +296,7 @@ async def create_scan(
         "max_pages": scan_request.max_pages,
         "notify_email": notify_email,
         "consent_ip": request.client.host,
+        "user_id": user["id"],
     }
 
     scan_run = await create_scan_run(scan_data)
@@ -307,10 +309,35 @@ async def create_scan(
 
     return {"run_id": run_id, "status": "queued"}
 
+@app.get("/runs", response_model=List[ScanRunResponse])
+async def list_scan_runs(user=Depends(get_current_user)):
+    runs = await get_scan_runs_by_user(user["id"])
+
+    responses = []
+    for run in runs:
+        findings = await get_findings_by_run(run.id)
+        responses.append(
+            ScanRunResponse(
+                id=run.id,
+                target_url=run.target_url,
+                status=run.status,
+                created_at=run.created_at,
+                completed_at=run.completed_at,
+                risk_score=run.risk_score,
+                finding_count=len(findings)
+            )
+        )
+
+    return responses
+
+
 @app.get("/runs/{run_id}", response_model=ScanRunResponse)
 async def get_scan_status(run_id: str, user=Depends(get_current_user)):
     scan_run = await get_scan_run(run_id)
     if not scan_run:
+        raise HTTPException(status_code=404, detail="Scan run not found")
+
+    if scan_run.user_id != user["id"]:
         raise HTTPException(status_code=404, detail="Scan run not found")
 
     findings = await get_findings_by_run(run_id)
@@ -328,6 +355,10 @@ async def get_scan_status(run_id: str, user=Depends(get_current_user)):
 
 @app.get("/runs/{run_id}/findings", response_model=List[FindingResponse])
 async def get_scan_findings(run_id: str, user=Depends(get_current_user)):
+    scan_run = await get_scan_run(run_id)
+    if not scan_run or scan_run.user_id != user["id"]:
+        raise HTTPException(status_code=404, detail="Scan run not found")
+
     findings = await get_findings_by_run(run_id)
 
     return [
@@ -351,7 +382,7 @@ async def get_scan_findings(run_id: str, user=Depends(get_current_user)):
 async def stream_scan_events(run_id: str, user=Depends(get_current_user)):
     # Verify run exists
     scan_run = await get_scan_run(run_id)
-    if not scan_run:
+    if not scan_run or scan_run.user_id != user["id"]:
         raise HTTPException(status_code=404, detail="Scan run not found")
 
     async def event_generator():
