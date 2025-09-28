@@ -15,13 +15,21 @@ const AuthContext = createContext({
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  
+  console.log('AuthProvider rendering, loading:', loading, 'user:', user)
 
   const refresh = useCallback(async () => {
     setLoading(true)
     try {
-      const currentUser = await fetchMe()
+      // Add timeout to prevent infinite loading
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Authentication timeout')), 5000)
+      )
+      
+      const currentUser = await Promise.race([fetchMe(), timeoutPromise])
       setUser(currentUser)
     } catch (error) {
+      console.error('Auth refresh error:', error)
       setUser(null)
     } finally {
       setLoading(false)
@@ -31,6 +39,18 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     refresh()
   }, [refresh])
+
+  // Add a fallback timeout in case the API is completely unavailable
+  useEffect(() => {
+    const fallbackTimeout = setTimeout(() => {
+      if (loading) {
+        console.log('Authentication timeout - setting loading to false')
+        setLoading(false)
+      }
+    }, 10000) // 10 second fallback
+
+    return () => clearTimeout(fallbackTimeout)
+  }, [loading])
 
   const login = useCallback(async (email, password) => {
     try {

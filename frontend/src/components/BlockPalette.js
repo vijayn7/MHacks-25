@@ -1,11 +1,11 @@
 "use client"
 
+
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   ChevronLeft, 
   ChevronRight, 
-  Shield, 
   Zap, 
   Brain, 
   Code, 
@@ -14,102 +14,88 @@ import {
   Settings
 } from "lucide-react"
 
+
 const BlockPalette = ({ onAddBlock, isCollapsed, onToggleCollapse, usedBlocks = [], onConfigureBlock }) => {
-  const [draggedBlock, setDraggedBlock] = useState(null)
   const [showConfigButton, setShowConfigButton] = useState(null)
+
 
   const blockTypes = [
     {
       type: "credentialed_scan",
-      name: "Credentialed Scan",
-      description: "Authenticated security testing with user credentials",
+      name: "Auth & Session Tests",
+      description: "Auth bypass, weak passwords, session flaws",
       icon: Lock,
       emoji: "🔐",
-      color: "bg-red-700/20 border-red-600/40 text-red-300",
-      usedColor: "bg-red-900/30 border-red-800/50 text-red-500",
+      color: "bg-pink-100/80 border-pink-200/60 text-pink-700",
+      usedColor: "bg-pink-200/60 border-pink-300/70 text-pink-600",
       severity: "high"
     },
     {
       type: "logic_fuzzer",
-      name: "Logic Fuzzer",
-      description: "Test application logic and business rules",
+      name: "Business Logic Tests",
+      description: "Price manipulation, workflow bypass",
       icon: Zap,
       emoji: "⚡",
-      color: "bg-orange-700/20 border-orange-600/40 text-orange-300",
-      usedColor: "bg-orange-900/30 border-orange-800/50 text-orange-500",
+      color: "bg-orange-100/80 border-orange-200/60 text-orange-700",
+      usedColor: "bg-orange-200/60 border-orange-300/70 text-orange-600",
       severity: "medium"
     },
     {
       type: "llm_generator",
-      name: "LLM Generator",
-      description: "AI-powered test case generation",
+      name: "AI Security Tests",
+      description: "Prompt injection, AI jailbreak",
       icon: Brain,
       emoji: "🤖",
-      color: "bg-purple-700/20 border-purple-600/40 text-purple-300",
-      usedColor: "bg-purple-900/30 border-purple-800/50 text-purple-500",
-      severity: "low"
-    },
-    {
-      type: "json_fuzzer",
-      name: "JSON Fuzzer",
-      description: "Fuzz JSON APIs and data structures",
-      icon: Code,
-      emoji: "📄",
-      color: "bg-blue-700/20 border-blue-600/40 text-blue-300",
-      usedColor: "bg-blue-900/30 border-blue-800/50 text-blue-500",
+      color: "bg-purple-100/80 border-purple-200/60 text-purple-700",
+      usedColor: "bg-purple-200/60 border-purple-300/70 text-purple-600",
       severity: "medium"
     },
     {
+      type: "json_fuzzer",
+      name: "API Fuzzing Tests",
+      description: "JSON injection, schema bypass",
+      icon: Code,
+      emoji: "📄",
+      color: "bg-blue-100/80 border-blue-200/60 text-blue-700",
+      usedColor: "bg-blue-200/60 border-blue-300/70 text-blue-600",
+      severity: "high"
+    },
+    {
       type: "supply_chain_scan",
-      name: "Supply Chain Scan",
-      description: "Analyze dependencies and supply chain risks",
+      name: "Dependency Security",
+      description: "Vulnerable deps, typosquatting",
       icon: Package,
       emoji: "📦",
-      color: "bg-green-700/20 border-green-600/40 text-green-300",
-      usedColor: "bg-green-900/30 border-green-800/50 text-green-500",
+      color: "bg-green-100/80 border-green-200/60 text-green-700",
+      usedColor: "bg-green-200/60 border-green-300/70 text-green-600",
       severity: "high"
     }
   ]
 
-  const handleDragStart = (blockType, event) => {
-    setDraggedBlock(blockType)
-    event.dataTransfer.effectAllowed = 'copy'
-    event.dataTransfer.setData('application/json', JSON.stringify(blockType))
-    
-    // Create a custom drag image with enhanced styling
-    const dragImage = event.target.cloneNode(true)
-    dragImage.style.transform = 'rotate(8deg) scale(1.1)'
-    dragImage.style.opacity = '0.9'
-    dragImage.style.filter = 'drop-shadow(0 10px 20px rgba(0,0,0,0.3))'
-    dragImage.style.border = '2px solid rgba(59, 130, 246, 0.8)'
-    dragImage.style.borderRadius = '12px'
-    dragImage.style.backgroundColor = 'rgba(255, 255, 255, 0.95)'
-    dragImage.style.padding = '8px'
-    dragImage.style.zIndex = '1000'
-    dragImage.style.position = 'absolute'
-    dragImage.style.pointerEvents = 'none'
-    dragImage.style.left = '-1000px'
-    dragImage.style.top = '-1000px'
-    
-    document.body.appendChild(dragImage)
-    event.dataTransfer.setDragImage(dragImage, 64, 64)
-    
-    // Clean up the drag image after a short delay
-    setTimeout(() => {
-      if (document.body.contains(dragImage)) {
-        document.body.removeChild(dragImage)
-      }
-    }, 0)
+
+  const handleBlockClick = (blockType) => {
+    onAddBlock(blockType)
   }
 
-  const handleDragEnd = () => {
-    setDraggedBlock(null)
-  }
 
   // Check if block type is already used
   const isBlockUsed = (blockType) => {
     return usedBlocks.some(block => block.type === blockType)
   }
+
+
+  // Get block display name
+  const getBlockDisplayName = (type) => {
+    const names = {
+      credentialed_scan: "Auth & Session Test",
+      logic_fuzzer: "Business Logic Test",
+      llm_generator: "AI Security Test",
+      json_fuzzer: "API Fuzzing Test",
+      supply_chain_scan: "Dependency Test"
+    }
+    return names[type] || type.replace('_', ' ')
+  }
+
 
   return (
     <motion.div
@@ -132,7 +118,7 @@ const BlockPalette = ({ onAddBlock, isCollapsed, onToggleCollapse, usedBlocks = 
             <p className="text-sm text-muted-foreground">Drag blocks to canvas</p>
           </motion.div>
         )}
-        
+       
         <motion.button
           onClick={onToggleCollapse}
           className="p-2 hover:bg-muted/20 rounded-lg transition-colors"
@@ -147,6 +133,7 @@ const BlockPalette = ({ onAddBlock, isCollapsed, onToggleCollapse, usedBlocks = 
         </motion.button>
       </div>
 
+
       {/* Block Types */}
       <div className="flex-1 overflow-y-auto p-4">
         <AnimatePresence>
@@ -159,48 +146,26 @@ const BlockPalette = ({ onAddBlock, isCollapsed, onToggleCollapse, usedBlocks = 
               className="grid grid-cols-2 gap-3"
             >
               {blockTypes.map((blockType, index) => {
-                const IconComponent = blockType.icon
                 return (
                   <motion.div
                     key={blockType.type}
-                    className={`relative w-28 h-28 rounded-xl border-2 cursor-grab active:cursor-grabbing ${
+                    className={`relative w-28 h-28 rounded-xl border-2 cursor-pointer ${
                       isBlockUsed(blockType.type) ? blockType.usedColor : blockType.color
                     } hover:scale-105 transition-all duration-200 ${
                       isBlockUsed(blockType.type) ? 'cursor-not-allowed' : ''
-                    } group shadow-lg hover:shadow-xl ${
-                      draggedBlock?.type === blockType.type ? 'ring-2 ring-blue-400 shadow-blue-400/50' : ''
-                    }`}
-                    style={{ 
-                      userSelect: 'none',
-                      transform: draggedBlock?.type === blockType.type ? 'rotate(2deg)' : 'rotate(0deg)',
-                      filter: draggedBlock?.type === blockType.type ? 'drop-shadow(0 5px 15px rgba(0,0,0,0.2))' : 'none'
+                    } group shadow-lg hover:shadow-xl`}
+                    style={{ userSelect: 'none' }}
+                    onMouseEnter={() => {
+                      setShowConfigButton(blockType.type)
                     }}
-                    draggable={!isBlockUsed(blockType.type)}
-                    onDragStart={(e) => !isBlockUsed(blockType.type) && handleDragStart(blockType, e)}
-                    onDragEnd={handleDragEnd}
-                    onMouseEnter={() => setShowConfigButton(blockType.type)}
-                    onMouseLeave={() => setShowConfigButton(null)}
-                    initial={{ opacity: 0, y: 20, rotate: -10 }}
-                    animate={{ 
-                      opacity: 1, 
-                      y: 0, 
-                      rotate: draggedBlock?.type === blockType.type ? 2 : 0
+                    onMouseLeave={() => {
+                      setShowConfigButton(null)
                     }}
-                    transition={{ 
-                      delay: index * 0.1,
-                      type: "spring",
-                      stiffness: 100,
-                      damping: 10
-                    }}
-                    whileHover={{ 
-                      scale: isBlockUsed(blockType.type) ? 1 : 1.08,
-                      rotate: isBlockUsed(blockType.type) ? 0 : 2,
-                      y: isBlockUsed(blockType.type) ? 0 : -2
-                    }}
-                    whileTap={{ 
-                      scale: isBlockUsed(blockType.type) ? 1 : 0.95,
-                      rotate: isBlockUsed(blockType.type) ? 0 : -1
-                    }}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    whileHover={{ scale: isBlockUsed(blockType.type) ? 1 : 1.05 }}
+                    whileTap={{ scale: isBlockUsed(blockType.type) ? 1 : 0.95 }}
                     onClick={() => !isBlockUsed(blockType.type) && onAddBlock(blockType)}
                   >
                     <div className="p-4 h-full flex flex-col justify-center items-center text-center relative" style={{ userSelect: 'none' }}>
@@ -208,14 +173,14 @@ const BlockPalette = ({ onAddBlock, isCollapsed, onToggleCollapse, usedBlocks = 
                       <div className="text-3xl mb-2" style={{ userSelect: 'none' }}>
                         {blockType.emoji}
                       </div>
-                      
+                     
                       <h3 className="font-bold text-xs capitalize mb-1 leading-tight" style={{ userSelect: 'none' }}>
-                        {blockType.type.replace('_', ' ').split(' ')[0]}
+                        {getBlockDisplayName(blockType.type)}
                       </h3>
                       <div className="text-xs opacity-90" style={{ userSelect: 'none' }}>
                         {blockType.severity}
                       </div>
-                      
+                     
                       {/* Config Button */}
                       {onConfigureBlock && (
                         <motion.button
@@ -236,12 +201,15 @@ const BlockPalette = ({ onAddBlock, isCollapsed, onToggleCollapse, usedBlocks = 
                         </motion.button>
                       )}
                     </div>
+
+
                   </motion.div>
                 )
               })}
             </motion.div>
           )}
         </AnimatePresence>
+
 
         {/* Collapsed view */}
         {isCollapsed && (
@@ -252,7 +220,6 @@ const BlockPalette = ({ onAddBlock, isCollapsed, onToggleCollapse, usedBlocks = 
             className="space-y-3"
           >
             {blockTypes.map((blockType, index) => {
-              const IconComponent = blockType.icon
               return (
                 <motion.button
                   key={blockType.type}
@@ -278,6 +245,7 @@ const BlockPalette = ({ onAddBlock, isCollapsed, onToggleCollapse, usedBlocks = 
         )}
       </div>
 
+
       {/* Footer */}
       {!isCollapsed && (
         <motion.div
@@ -287,13 +255,14 @@ const BlockPalette = ({ onAddBlock, isCollapsed, onToggleCollapse, usedBlocks = 
           className="p-4 border-t border-border/50"
         >
           <div className="text-xs text-muted-foreground text-center">
-            <p>Drag blocks to canvas or click to add</p>
-            <p className="mt-1">Connect blocks to create workflows</p>
+            <p>Click blocks to add to canvas</p>
+            <p className="mt-1">Click to place, then connect blocks</p>
           </div>
         </motion.div>
       )}
     </motion.div>
   )
 }
+
 
 export default BlockPalette

@@ -37,11 +37,7 @@ const BlockCanvas = ({
   onOpenProperties
 }) => {
   const canvasRef = useRef(null)
-  const [isDragging, setIsDragging] = useState(false)
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
-  const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 })
   const [connectingFrom, setConnectingFrom] = useState(null)
-  const [showProperties, setShowProperties] = useState(false)
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [showGrid, setShowGrid] = useState(true)
@@ -51,514 +47,250 @@ const BlockCanvas = ({
   const [historyIndex, setHistoryIndex] = useState(-1)
   const [validationErrors, setValidationErrors] = useState([])
   const [showValidation, setShowValidation] = useState(false)
-  const [deleteZoneActive, setDeleteZoneActive] = useState(false)
-  const [showConfigButton, setShowConfigButton] = useState(null)
-  const [showDeleteButton, setShowDeleteButton] = useState(null)
-  const [draggedBlockId, setDraggedBlockId] = useState(null)
-  const [magneticSnap, setMagneticSnap] = useState(null)
-  const [isMouseDown, setIsMouseDown] = useState(false)
-  const [dragOverCanvas, setDragOverCanvas] = useState(false)
   const [showDeleteAllModal, setShowDeleteAllModal] = useState(false)
   const [dontShowAgain, setDontShowAgain] = useState(false)
-  const [dragVelocity, setDragVelocity] = useState({ x: 0, y: 0 })
-  const [lastDragPos, setLastDragPos] = useState({ x: 0, y: 0 })
-  const [dragStartTime, setDragStartTime] = useState(0)
-  const [snapZones, setSnapZones] = useState([])
-  const [isSnapping, setIsSnapping] = useState(false)
-  const [dragShadow, setDragShadow] = useState(null)
-  const [connectionPreview, setConnectionPreview] = useState(null)
+  const [isMoving, setIsMoving] = useState(false)
+  const [moveTarget, setMoveTarget] = useState(null)
 
-  // Handle block drag start
-  const handleBlockDragStart = useCallback((blockId, event) => {
-    event.preventDefault()
-    event.stopPropagation()
-    
-    const block = blocks.find(b => b.id === blockId)
-    if (!block) return
+  // Handle canvas click to move selected block
+  const handleCanvasClick = useCallback((event) => {
+    if (!selectedBlock || isMoving) return
 
     const rect = canvasRef.current.getBoundingClientRect()
     const mouseX = event.clientX - rect.left
     const mouseY = event.clientY - rect.top
     
-    setDragOffset({
-      x: mouseX - block.x,
-      y: mouseY - block.y
-    })
-    setDragStartPos({ x: mouseX, y: mouseY })
-    setLastDragPos({ x: mouseX, y: mouseY })
-    setDragVelocity({ x: 0, y: 0 })
-    setDragStartTime(Date.now())
-    setIsDragging(true)
-    setDraggedBlockId(blockId)
-    setDeleteZoneActive(true)
-    setShowConfigButton(null)
-    setShowDeleteButton(null)
-    setMagneticSnap(null)
-    setIsMouseDown(true)
-    setIsSnapping(false)
-    
-    // Create drag shadow
-    setDragShadow({
-      x: block.x,
-      y: block.y,
-      type: block.type,
-      opacity: 0.3
-    })
-    
-    // Generate snap zones for better alignment
-    generateSnapZones(block)
-  }, [blocks])
+    // Convert screen coordinates to canvas coordinates
+    const canvasX = (mouseX - pan.x) / zoom
+    const canvasY = (mouseY - pan.y) / zoom
 
-  // Generate snap zones for better alignment
-  const generateSnapZones = useCallback((currentBlock) => {
-    const blockSize = 128
-    const gridSize = 20
-    const zones = []
-    
-    // Grid snap zones
-    for (let x = 0; x <= 800; x += gridSize) {
-      for (let y = 0; y <= 600; y += gridSize) {
-        zones.push({
-          type: 'grid',
-          x,
-          y,
-          strength: 0.3,
-          priority: 1
-        })
-      }
-    }
-    
-    // Block alignment zones
-    blocks.forEach(block => {
-      if (block.id === currentBlock.id) return
-      
-      // Horizontal alignment
-      zones.push({
-        type: 'horizontal',
-        x: block.x,
-        y: currentBlock.y,
-        strength: 0.8,
-        priority: 2,
-        targetBlock: block.id
-      })
-      
-      // Vertical alignment
-      zones.push({
-        type: 'vertical',
-        x: currentBlock.x,
-        y: block.y,
-        strength: 0.8,
-        priority: 2,
-        targetBlock: block.id
-      })
-      
-      // Center alignment
-      zones.push({
-        type: 'center',
-        x: block.x,
-        y: block.y,
-        strength: 0.6,
-        priority: 1,
-        targetBlock: block.id
-      })
-    })
-    
-    setSnapZones(zones)
-  }, [blocks])
-
-  // Handle mouse move for smooth dragging
-  const handleMouseMove = useCallback((event) => {
-    if (!isDragging || !draggedBlockId) return
-
-    event.preventDefault()
-    const rect = canvasRef.current.getBoundingClientRect()
-    const mouseX = event.clientX - rect.left
-    const mouseY = event.clientY - rect.top
-    
-    // Calculate velocity for momentum
-    const currentTime = Date.now()
-    const deltaTime = currentTime - dragStartTime
-    if (deltaTime > 0) {
-      const velocityX = (mouseX - lastDragPos.x) / (deltaTime / 1000)
-      const velocityY = (mouseY - lastDragPos.y) / (deltaTime / 1000)
-      setDragVelocity({ x: velocityX, y: velocityY })
-    }
-    setLastDragPos({ x: mouseX, y: mouseY })
-    
-    let newX = mouseX - dragOffset.x
-    let newY = mouseY - dragOffset.y
-
-    // Enhanced snapping system
-    const blockSize = 128
-    const snapThreshold = 25
-    const magneticThreshold = 60
-    const currentBlock = blocks.find(b => b.id === draggedBlockId)
-    
-    if (currentBlock) {
-      let bestSnap = null
-      let minDistance = Infinity
-      
-      // Check all snap zones
-      snapZones.forEach(zone => {
-        let snapX = newX
-        let snapY = newY
-        let distance = 0
-        
-        switch (zone.type) {
-          case 'grid':
-            snapX = zone.x
-            snapY = zone.y
-            distance = Math.sqrt(Math.pow(newX - zone.x, 2) + Math.pow(newY - zone.y, 2))
-            break
-          case 'horizontal':
-            snapX = zone.x
-            distance = Math.abs(newX - zone.x)
-            break
-          case 'vertical':
-            snapY = zone.y
-            distance = Math.abs(newY - zone.y)
-            break
-          case 'center':
-            snapX = zone.x
-            snapY = zone.y
-            distance = Math.sqrt(Math.pow(newX - zone.x, 2) + Math.pow(newY - zone.y, 2))
-            break
-        }
-        
-        // Check if this snap is better
-        if (distance < snapThreshold && distance < minDistance) {
-          minDistance = distance
-          bestSnap = {
-            x: snapX,
-            y: snapY,
-            type: zone.type,
-            strength: zone.strength,
-            priority: zone.priority,
-            targetBlock: zone.targetBlock
-          }
-        }
-      })
-      
-      // Apply snapping with smooth interpolation
-      if (bestSnap) {
-        const snapStrength = bestSnap.strength * (1 - minDistance / snapThreshold)
-        newX = newX + (bestSnap.x - newX) * snapStrength
-        newY = newY + (bestSnap.y - newY) * snapStrength
-        setIsSnapping(true)
-        
-        // Update magnetic snap for visual feedback
-        if (bestSnap.targetBlock) {
-          setMagneticSnap({ 
-            blockId: draggedBlockId, 
-            targetBlock: bestSnap.targetBlock, 
-            connection: bestSnap.type 
-          })
-        }
-      } else {
-        setIsSnapping(false)
-        setMagneticSnap(null)
-      }
-      
-      // Enhanced magnetic connection snapping
-      let connectionSnap = null
-      let minConnectionDistance = Infinity
-      
-      for (const otherBlock of blocks) {
-        if (otherBlock.id === draggedBlockId) continue
-        
-        const connectionPoints = [
-          { x: otherBlock.x - blockSize, y: otherBlock.y, type: 'rightToLeft' },
-          { x: otherBlock.x + blockSize, y: otherBlock.y, type: 'leftToRight' },
-          { x: otherBlock.x, y: otherBlock.y - blockSize, type: 'bottomToTop' },
-          { x: otherBlock.x, y: otherBlock.y + blockSize, type: 'topToBottom' }
-        ]
-        
-        connectionPoints.forEach(point => {
-          const distance = Math.sqrt(Math.pow(newX - point.x, 2) + Math.pow(newY - point.y, 2))
-          if (distance < magneticThreshold && distance < minConnectionDistance) {
-            minConnectionDistance = distance
-            connectionSnap = { block: otherBlock, ...point, distance }
-          }
-        })
-      }
-      
-      // Apply connection snapping
-      if (connectionSnap && connectionSnap.distance < snapThreshold) {
-        newX = connectionSnap.x
-        newY = connectionSnap.y
-        setMagneticSnap({ 
-          blockId: draggedBlockId, 
-          targetBlock: connectionSnap.block.id, 
-          connection: connectionSnap.type 
-        })
-        setIsSnapping(true)
-      }
-    }
-
-    // Apply physics constraints
-    const canvasWidth = 800
-    const canvasHeight = 600
-    newX = Math.max(0, Math.min(newX, canvasWidth - blockSize))
-    newY = Math.max(0, Math.min(newY, canvasHeight - blockSize))
-
-    // Update drag shadow
-    setDragShadow(prev => prev ? { ...prev, x: newX, y: newY } : null)
-
-    // Update block position with smooth animation
-    setBlocks(prev => prev.map(block => 
-      block.id === draggedBlockId 
-        ? { ...block, x: newX, y: newY }
+    // Move the selected block to the clicked position
+    setBlocks(prev => prev.map(block =>
+      block.id === selectedBlock.id
+        ? { ...block, x: canvasX - 64, y: canvasY - 64 } // Center the block on click
         : block
     ))
-  }, [isDragging, dragOffset, setBlocks, blocks, draggedBlockId, snapZones, lastDragPos, dragStartTime])
 
-  // Handle mouse up
-  const handleMouseUp = useCallback(() => {
-    if (isDragging && draggedBlockId) {
-      handleBlockDragEnd(draggedBlockId)
-    }
-    setIsMouseDown(false)
-  }, [isDragging, draggedBlockId])
+    // Save to history
+    saveToHistory()
+  }, [selectedBlock, isMoving, pan, zoom, setBlocks])
 
-    // Delete block
-    const deleteBlock = useCallback((blockId) => {
-      setBlocks(prev => prev.filter(b => b.id !== blockId))
-      setEdges(prev => prev.filter(e => e.from !== blockId && e.to !== blockId))
-      if (selectedBlock?.id === blockId) {
-        setSelectedBlock(null)
-        setShowProperties(false)
-      }
-    }, [setBlocks, setEdges, selectedBlock, setSelectedBlock])
+  // Handle block click to select
+  const handleBlockClick = useCallback((blockId, event) => {
+    event.stopPropagation()
+    setSelectedBlock(blocks.find(b => b.id === blockId))
+    setIsMoving(true)
+    setMoveTarget(blockId)
+  }, [blocks])
 
-  // Handle block drag end
-  const handleBlockDragEnd = useCallback((blockId) => {
-    // Apply momentum if velocity is high enough
-    const momentumThreshold = 0.5
-    if (Math.abs(dragVelocity.x) > momentumThreshold || Math.abs(dragVelocity.y) > momentumThreshold) {
-      const currentBlock = blocks.find(b => b.id === blockId)
-      if (currentBlock) {
-        const momentumFactor = 0.3
-        const newX = Math.max(0, Math.min(800 - 128, currentBlock.x + dragVelocity.x * momentumFactor))
-        const newY = Math.max(0, Math.min(600 - 128, currentBlock.y + dragVelocity.y * momentumFactor))
-        
-        setBlocks(prev => prev.map(block => 
-          block.id === blockId 
-            ? { ...block, x: newX, y: newY }
-            : block
-        ))
-      }
-    }
-    
-    // Cleanup
-    setIsDragging(false)
-    setDraggedBlockId(null)
-    setDeleteZoneActive(false)
-    setMagneticSnap(null)
-    setShowConfigButton(null)
-    setShowDeleteButton(null)
-    setIsSnapping(false)
-    setDragShadow(null)
-    setSnapZones([])
-    setDragVelocity({ x: 0, y: 0 })
-    setConnectionPreview(null)
-  }, [blocks, dragVelocity, setBlocks])
+  // Handle block double click to open properties
+  const handleBlockDoubleClick = useCallback((blockId, event) => {
+    event.stopPropagation()
+    onOpenProperties(blocks.find(b => b.id === blockId))
+  }, [blocks, onOpenProperties])
 
-  // Add global mouse event listeners
-  useEffect(() => {
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove)
-      document.addEventListener('mouseup', handleMouseUp)
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove)
-        document.removeEventListener('mouseup', handleMouseUp)
-      }
-    }
-  }, [isDragging, handleMouseMove, handleMouseUp])
-
-  // Handle drag over canvas
-  const handleDragOver = useCallback((event) => {
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'copy'
-    setDragOverCanvas(true)
-  }, [])
-
-  // Handle drag leave canvas
-  const handleDragLeave = useCallback((event) => {
-    if (!canvasRef.current?.contains(event.relatedTarget)) {
-      setDragOverCanvas(false)
-    }
-  }, [])
-
-  // Handle drop on canvas
-  const handleDrop = useCallback((event) => {
-    event.preventDefault()
-    setDragOverCanvas(false)
-    
-    try {
-      const blockTypeData = event.dataTransfer.getData('application/json')
-      if (blockTypeData) {
-        const blockType = JSON.parse(blockTypeData)
-        
-        // Get drop position
-        const rect = canvasRef.current.getBoundingClientRect()
-        const x = event.clientX - rect.left - 64 // Center the block
-        const y = event.clientY - rect.top - 64
-        
-        // Check if block type already exists
-        const existingBlock = blocks.find(block => block.type === blockType.type)
-        if (existingBlock) {
-          alert(`Block type "${blockType.type}" is already on the canvas`)
-          return
-        }
-
-        // Create new block
-        const newBlock = {
-          id: `block-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          type: blockType.type,
-          x: Math.max(0, Math.min(x, 800)),
-          y: Math.max(0, Math.min(y, 600)),
-          script: `tests/${blockType.type}.py::run_scan`,
-          inputs: {
-            target_url: "https://demo.app",
-            ...(blockType.type === 'credentialed_scan' && { username: "vaultRef:cred-1" })
-          },
-          safe_mode: true,
-          timeout_seconds: 600,
-          metadata: {
-            severity: blockType.severity,
-            mvp: true
-          }
-        }
-        
-        setBlocks(prev => [...prev, newBlock])
-      }
-    } catch (error) {
-      console.error('Error handling drop:', error)
-    }
-  }, [blocks, setBlocks])
-
-  // Handle delete all blocks
-  const handleDeleteAllBlocks = useCallback(() => {
-    // Check if user has disabled confirmations
-    const skipConfirmation = localStorage.getItem('skipDeleteAllConfirmation') === 'true'
-    
-    if (skipConfirmation) {
-      // Delete without confirmation
-      setBlocks([])
-      setEdges([])
-      setSelectedBlock(null)
-    } else {
-      // Show custom confirmation modal
-      setShowDeleteAllModal(true)
-    }
-  }, [setBlocks, setEdges, setSelectedBlock])
-
-  // Confirm delete all blocks
-  const confirmDeleteAll = useCallback(() => {
-    setBlocks([])
-    setEdges([])
-    setSelectedBlock(null)
-    setShowDeleteAllModal(false)
-    
-    // Save preference if checkbox was checked
-    if (dontShowAgain) {
-      localStorage.setItem('skipDeleteAllConfirmation', 'true')
-    }
-    setDontShowAgain(false)
-  }, [setBlocks, setEdges, setSelectedBlock, dontShowAgain])
-
-  // Cancel delete all
-  const cancelDeleteAll = useCallback(() => {
-    setShowDeleteAllModal(false)
-    setDontShowAgain(false)
-  }, [])
-
-  // Handle block click
-  const handleBlockClick = useCallback((block, event) => {
-    // Don't handle clicks during drag
-    if (isDragging) return
-    
-    // Check if clicking on config button
-    if (event.target.closest('.config-button')) {
-      event.stopPropagation()
+  // Handle canvas panning
+  const handleMouseDown = useCallback((event) => {
+    if (event.button === 1 || (event.button === 0 && event.ctrlKey)) {
       event.preventDefault()
-      setSelectedBlock(block)
-      onOpenProperties(block)
-      return
+      setIsPanning(true)
+      setPanStart({ x: event.clientX - pan.x, y: event.clientY - pan.y })
     }
-    
-    // If clicking on the block itself (not config button), just select it
-    setSelectedBlock(block)
-  }, [isDragging, setSelectedBlock, onOpenProperties])
+  }, [pan])
 
-  // Handle block hover for buttons
-  const handleBlockHover = useCallback((blockId, isHovering) => {
-    if (!isDragging && draggedBlockId !== blockId) {
-      setShowConfigButton(isHovering ? blockId : null)
-      setShowDeleteButton(isHovering ? blockId : null)
+  const handleMouseMove = useCallback((event) => {
+    if (isPanning) {
+      setPan({
+        x: event.clientX - panStart.x,
+        y: event.clientY - panStart.y
+      })
     }
-  }, [isDragging, draggedBlockId])
+  }, [isPanning, panStart])
 
-  // Handle connection start
-  const handleConnectionStart = useCallback((blockId) => {
-    setConnectingFrom(blockId)
+  const handleMouseUp = useCallback(() => {
+    setIsPanning(false)
+    setIsMoving(false)
+    setMoveTarget(null)
   }, [])
 
-  // Handle connection end
-  const handleConnectionEnd = useCallback((targetBlockId) => {
-    if (connectingFrom && connectingFrom !== targetBlockId) {
-      const newEdge = { from: connectingFrom, to: targetBlockId }
-      setEdges(prev => [...prev, newEdge])
+  // Handle wheel zoom
+  const handleWheel = useCallback((event) => {
+    event.preventDefault()
+    const delta = event.deltaY > 0 ? 0.9 : 1.1
+    setZoom(prev => Math.max(0.1, Math.min(3, prev * delta)))
+  }, [])
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') return
+
+      switch (event.key) {
+        case 'Delete':
+        case 'Backspace':
+          if (selectedBlock) {
+            deleteBlock(selectedBlock.id)
+          }
+          break
+        case 'Escape':
+          setSelectedBlock(null)
+          setConnectingFrom(null)
+          break
+        case 's':
+          if (event.ctrlKey || event.metaKey) {
+    event.preventDefault()
+            onSaveProject()
+          }
+          break
+        case 'o':
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault()
+            onLoadProject()
+          }
+          break
+        case 'z':
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault()
+            if (event.shiftKey) {
+              redo()
+            } else {
+              undo()
+            }
+          }
+          break
+        case 'y':
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault()
+            redo()
+          }
+          break
+        case '=':
+        case '+':
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault()
+            setZoom(prev => Math.min(3, prev * 1.1))
+          }
+          break
+        case '-':
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault()
+            setZoom(prev => Math.max(0.1, prev * 0.9))
+          }
+          break
+        case '0':
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault()
+            setZoom(1)
+            setPan({ x: 0, y: 0 })
+          }
+          break
+        case 'g':
+          if (event.ctrlKey || event.metaKey) {
+      event.preventDefault()
+            setShowGrid(!showGrid)
+          }
+          break
+      }
     }
-    setConnectingFrom(null)
-  }, [connectingFrom, setEdges])
 
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedBlock, showGrid, onSaveProject, onLoadProject])
 
-
-  // Save state to history for undo/redo
+  // History management
   const saveToHistory = useCallback(() => {
-    const state = { blocks: [...blocks], edges: [...edges] }
-    const newHistory = history.slice(0, historyIndex + 1)
-    newHistory.push(state)
-    setHistory(newHistory)
-    setHistoryIndex(newHistory.length - 1)
-  }, [blocks, edges, history, historyIndex])
+    const newState = { blocks: [...blocks], edges: [...edges] }
+    setHistory(prev => {
+      const newHistory = prev.slice(0, historyIndex + 1)
+      newHistory.push(newState)
+      return newHistory.slice(-50) // Keep last 50 states
+    })
+    setHistoryIndex(prev => Math.min(prev + 1, 49))
+  }, [blocks, edges, historyIndex])
 
-  // Undo
   const undo = useCallback(() => {
     if (historyIndex > 0) {
       const prevState = history[historyIndex - 1]
       setBlocks(prevState.blocks)
       setEdges(prevState.edges)
-      setHistoryIndex(historyIndex - 1)
+      setHistoryIndex(prev => prev - 1)
     }
   }, [history, historyIndex, setBlocks, setEdges])
 
-  // Redo
   const redo = useCallback(() => {
     if (historyIndex < history.length - 1) {
       const nextState = history[historyIndex + 1]
       setBlocks(nextState.blocks)
       setEdges(nextState.edges)
-      setHistoryIndex(historyIndex + 1)
+      setHistoryIndex(prev => prev + 1)
     }
   }, [history, historyIndex, setBlocks, setEdges])
 
-  // Validate graph
-  const validateGraph = useCallback(() => {
+  // Block operations
+  const deleteBlock = useCallback((blockId) => {
+    setBlocks(prev => prev.filter(block => block.id !== blockId))
+    setEdges(prev => prev.filter(edge => edge.from !== blockId && edge.to !== blockId))
+    if (selectedBlock?.id === blockId) {
+      setSelectedBlock(null)
+    }
+    saveToHistory()
+  }, [setBlocks, setEdges, selectedBlock, saveToHistory])
+
+  const deleteAllBlocks = useCallback(() => {
+    setBlocks([])
+    setEdges([])
+    setSelectedBlock(null)
+    setConnectingFrom(null)
+    saveToHistory()
+  }, [setBlocks, setEdges, setSelectedBlock, setConnectingFrom, saveToHistory])
+
+  // Connection handling
+  const handleConnectionStart = useCallback((blockId, event) => {
+    event.stopPropagation()
+    setConnectingFrom(blockId)
+  }, [])
+
+  const handleConnectionEnd = useCallback((blockId, event) => {
+    event.stopPropagation()
+    
+    if (connectingFrom && connectingFrom !== blockId) {
+      // Check if connection already exists
+      const existingConnection = edges.find(
+        edge => edge.from === connectingFrom && edge.to === blockId
+      )
+      
+      if (!existingConnection) {
+        setEdges(prev => [...prev, { from: connectingFrom, to: blockId }])
+        saveToHistory()
+      }
+    }
+    
+    setConnectingFrom(null)
+  }, [connectingFrom, edges, saveToHistory])
+
+  // Validation
+  const validateWorkflow = useCallback(() => {
     const errors = []
     
-    // Check for missing required inputs
+    if (blocks.length === 0) {
+      errors.push("No blocks in workflow")
+      return errors
+    }
+
+    // Check for isolated blocks
+    const connectedBlocks = new Set()
+    edges.forEach(edge => {
+      connectedBlocks.add(edge.from)
+      connectedBlocks.add(edge.to)
+    })
+
     blocks.forEach(block => {
-      if (block.type === 'credentialed_scan' && !block.inputs?.username) {
-        errors.push(`Block ${block.id}: Missing required username input`)
-      }
-      if (block.type === 'json_fuzzer' && !block.inputs?.api_endpoint) {
-        errors.push(`Block ${block.id}: Missing required api_endpoint input`)
+      if (!connectedBlocks.has(block.id)) {
+        errors.push(`Block "${block.name}" is not connected to any other block`)
       }
     })
-    
-    // Check for cycles (simple cycle detection)
+
+    // Check for cycles
     const visited = new Set()
     const recStack = new Set()
     
@@ -569,7 +301,7 @@ const BlockCanvas = ({
       visited.add(nodeId)
       recStack.add(nodeId)
       
-      const outgoingEdges = edges.filter(e => e.from === nodeId)
+      const outgoingEdges = edges.filter(edge => edge.from === nodeId)
       for (const edge of outgoingEdges) {
         if (hasCycle(edge.to)) return true
       }
@@ -580,120 +312,24 @@ const BlockCanvas = ({
     
     for (const block of blocks) {
       if (hasCycle(block.id)) {
-        errors.push(`Cycle detected involving block ${block.id}`)
+        errors.push("Workflow contains cycles")
         break
       }
     }
     
-    setValidationErrors(errors)
-    return errors.length === 0
+    return errors
   }, [blocks, edges])
-
-  // Handle start scan with validation
-  const handleStartScan = useCallback(async () => {
-    if (!validateGraph()) {
-      setShowValidation(true)
-      return
-    }
-    
-    // Check for vault references and require consent
-    const hasVaultRefs = blocks.some(block => 
-      Object.values(block.inputs || {}).some(value => 
-        typeof value === 'string' && value.startsWith('vaultRef:')
-      )
-    )
-    
-    if (hasVaultRefs) {
-      const consent = window.confirm(
-        'This scan contains vault references (credentials). Do you consent to using these credentials for this scan?\n\n' +
-        'Note: Credentials will be handled securely and not logged in plaintext.'
-      )
-      if (!consent) return
-    }
-    
-    await onStartScan()
-  }, [validateGraph, blocks, onStartScan])
-
-  // Handle zoom
-  const handleZoom = useCallback((delta) => {
-    setZoom(prev => Math.max(0.1, Math.min(3, prev + delta)))
-  }, [])
-
-  // Handle pan start
-  const handlePanStart = useCallback((event) => {
-    if (event.button === 1 || (event.button === 0 && event.ctrlKey)) { // Middle mouse or Ctrl+click
-      setIsPanning(true)
-      setPanStart({ x: event.clientX - pan.x, y: event.clientY - pan.y })
-    }
-  }, [pan])
-
-  // Handle pan move
-  const handlePanMove = useCallback((event) => {
-    if (isPanning) {
-      setPan({
-        x: event.clientX - panStart.x,
-        y: event.clientY - panStart.y
-      })
-    }
-  }, [isPanning, panStart])
-
-  // Handle pan end
-  const handlePanEnd = useCallback(() => {
-    setIsPanning(false)
-  }, [])
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (event.ctrlKey || event.metaKey) {
-        switch (event.key) {
-          case 'z':
-            event.preventDefault()
-            if (event.shiftKey) {
-              redo()
-            } else {
-              undo()
-            }
-            break
-          case 's':
-            event.preventDefault()
-            onSaveProject()
-            break
-          case 'o':
-            event.preventDefault()
-            onLoadProject()
-            break
-          case '+':
-          case '=':
-            event.preventDefault()
-            handleZoom(0.1)
-            break
-          case '-':
-            event.preventDefault()
-            handleZoom(-0.1)
-            break
-        }
-      }
-      
-      if (event.key === 'Delete' && selectedBlock) {
-        deleteBlock(selectedBlock.id)
-      }
-    }
-    
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [undo, redo, onSaveProject, onLoadProject, handleZoom, selectedBlock, deleteBlock])
 
   // Get block type color
   const getBlockColor = (type) => {
     const colors = {
-      credentialed_scan: "bg-red-700/80 border-red-600/60 text-red-100",
-      logic_fuzzer: "bg-orange-700/80 border-orange-600/60 text-orange-100",
-      llm_generator: "bg-purple-700/80 border-purple-600/60 text-purple-100",
-      json_fuzzer: "bg-blue-700/80 border-blue-600/60 text-blue-100",
-      supply_chain_scan: "bg-green-700/80 border-green-600/60 text-green-100"
+      credentialed_scan: "bg-pink-200/90 border-pink-300/70 text-pink-800",
+      logic_fuzzer: "bg-orange-200/90 border-orange-300/70 text-orange-800",
+      llm_generator: "bg-purple-200/90 border-purple-300/70 text-purple-800",
+      json_fuzzer: "bg-blue-200/90 border-blue-300/70 text-blue-800",
+      supply_chain_scan: "bg-green-200/90 border-green-300/70 text-green-800"
     }
-    return colors[type] || "bg-gray-700/80 border-gray-600/60 text-gray-100"
+    return colors[type] || "bg-gray-200/90 border-gray-300/70 text-gray-800"
   }
 
   // Get block type icon
@@ -705,510 +341,354 @@ const BlockCanvas = ({
       json_fuzzer: "📄",
       supply_chain_scan: "📦"
     }
-    return icons[type] || "🔧"
+    return icons[type] || "❓"
+  }
+
+  // Get block type name
+  const getBlockName = (type) => {
+    const names = {
+      credentialed_scan: "Auth & Session Tests",
+      logic_fuzzer: "Business Logic Tests",
+      llm_generator: "AI Security Tests",
+      json_fuzzer: "API Fuzzing Tests",
+      supply_chain_scan: "Dependency Security"
+    }
+    return names[type] || type
   }
 
   return (
-    <div className="flex-1 relative overflow-hidden">
+    <div className="flex-1 relative overflow-hidden bg-background">
+      {/* Toolbar */}
+      <div className="absolute top-4 left-4 z-20 flex gap-2">
+        <div className="glass-card px-4 py-2 rounded-lg flex items-center gap-2">
+          <button
+            onClick={() => setZoom(prev => Math.max(0.1, prev * 0.9))}
+            className="p-1 hover:bg-muted rounded"
+            title="Zoom Out"
+          >
+            <ZoomOut className="w-4 h-4" />
+          </button>
+          <span className="text-sm text-muted-foreground min-w-[3rem] text-center">
+            {Math.round(zoom * 100)}%
+          </span>
+          <button
+            onClick={() => setZoom(prev => Math.min(3, prev * 1.1))}
+            className="p-1 hover:bg-muted rounded"
+            title="Zoom In"
+          >
+            <ZoomIn className="w-4 h-4" />
+          </button>
+          <div className="w-px h-4 bg-border mx-1" />
+          <button
+            onClick={() => setShowGrid(!showGrid)}
+            className={`p-1 rounded ${showGrid ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+            title="Toggle Grid"
+          >
+            <Grid className="w-4 h-4" />
+          </button>
+          <div className="w-px h-4 bg-border mx-1" />
+          <button
+            onClick={undo}
+            disabled={historyIndex <= 0}
+            className="p-1 hover:bg-muted rounded disabled:opacity-50"
+            title="Undo"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </button>
+          <button
+            onClick={redo}
+            disabled={historyIndex >= history.length - 1}
+            className="p-1 hover:bg-muted rounded disabled:opacity-50"
+            title="Redo"
+          >
+            <RotateCw className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="glass-card px-4 py-2 rounded-lg flex items-center gap-2">
+          <button
+            onClick={() => setShowValidation(!showValidation)}
+            className={`p-1 rounded ${showValidation ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+            title="Validate Workflow"
+          >
+            <CheckCircle className="w-4 h-4" />
+          </button>
+          <button
+            onClick={onSaveProject}
+            className="p-1 hover:bg-muted rounded"
+            title="Save Project"
+          >
+            <Save className="w-4 h-4" />
+          </button>
+          <button
+            onClick={onLoadProject}
+            className="p-1 hover:bg-muted rounded"
+            title="Load Project"
+          >
+            <FolderOpen className="w-4 h-4" />
+          </button>
+          <button
+            onClick={onExportProject}
+            className="p-1 hover:bg-muted rounded"
+            title="Export Project"
+          >
+            <Download className="w-4 h-4" />
+          </button>
+          <button
+            onClick={onImportProject}
+            className="p-1 hover:bg-muted rounded"
+            title="Import Project"
+          >
+            <Upload className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="glass-card px-4 py-2 rounded-lg flex items-center gap-2">
+          <button
+            onClick={() => setShowDeleteAllModal(true)}
+            disabled={blocks.length === 0}
+            className="p-1 hover:bg-muted rounded disabled:opacity-50 text-destructive"
+            title="Delete All Blocks"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
       {/* Canvas */}
       <div 
         ref={canvasRef}
-        className={`w-full h-full relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 cursor-grab active:cursor-grabbing transition-all duration-200 ${
-          dragOverCanvas ? 'ring-2 ring-primary/50 bg-primary/5' : ''
-        }`}
+        className="w-full h-full relative overflow-hidden cursor-crosshair"
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onWheel={handleWheel}
+        onClick={handleCanvasClick}
         style={{
-          backgroundImage: `
-            radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.1) 0%, transparent 50%),
-            radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.1) 0%, transparent 50%),
-            radial-gradient(circle at 40% 80%, rgba(120, 219, 255, 0.1) 0%, transparent 50%)
-          `,
-          transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)`,
-          transformOrigin: '0 0'
+          cursor: isPanning ? 'grabbing' : 'crosshair',
+          backgroundImage: showGrid 
+            ? `radial-gradient(circle, hsl(var(--border)) 1px, transparent 1px)`
+            : 'none',
+          backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
+          backgroundPosition: `${pan.x}px ${pan.y}px`
         }}
-        onMouseDown={handlePanStart}
-        onMouseMove={handlePanMove}
-        onMouseUp={handlePanEnd}
-        onMouseLeave={handlePanEnd}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
       >
-        {/* Grid Pattern */}
-        {showGrid && (
-          <div 
-            className="absolute inset-0 opacity-20"
-            style={{
-              backgroundImage: `
-                linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)
-              `,
-              backgroundSize: `${20 * zoom}px ${20 * zoom}px`
-            }}
-          />
-        )}
-
-        {/* Edges */}
-        <svg className="absolute inset-0 pointer-events-none" style={{ zIndex: 1 }}>
-          {edges.map((edge, index) => {
-            const fromBlock = blocks.find(b => b.id === edge.from)
-            const toBlock = blocks.find(b => b.id === edge.to)
-            if (!fromBlock || !toBlock) return null
-
-            const startX = fromBlock.x + 64 // center of 128px block
-            const startY = fromBlock.y + 64
-            const endX = toBlock.x + 64
-            const endY = toBlock.y + 64
-
-            // Create curved path for better visual appeal
-            const midX = (startX + endX) / 2
-            const midY = (startY + endY) / 2
-            const controlX = midX + (endY - startY) * 0.3
-            const controlY = midY - (endX - startX) * 0.3
-            
-            const pathData = `M ${startX} ${startY} Q ${controlX} ${controlY} ${endX} ${endY}`
-
-            return (
-              <motion.path
-                key={index}
-                d={pathData}
-                stroke="rgba(59, 130, 246, 0.6)"
-                strokeWidth="2"
-                fill="none"
-                strokeDasharray="5,5"
-                initial={{ pathLength: 0 }}
-                animate={{ pathLength: 1 }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-              />
-            )
-          })}
-        </svg>
-
-        {/* Drag Shadow */}
-        {dragShadow && (
-          <motion.div
-            className={`absolute w-32 h-32 rounded-xl border-2 ${getBlockColor(dragShadow.type)} opacity-30`}
-            style={{ 
-              left: dragShadow.x, 
-              top: dragShadow.y,
-              zIndex: 1,
-              filter: 'blur(2px)',
-              transform: 'scale(0.95)'
-            }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.3 }}
-            exit={{ opacity: 0 }}
-          />
-        )}
-
-        {/* Snap Zone Indicators */}
-        {isDragging && snapZones.map((zone, index) => {
-          if (zone.type === 'grid') return null // Skip grid zones for performance
-          
-          return (
-            <motion.div
-              key={index}
-              className={`absolute w-2 h-2 rounded-full ${
-                zone.type === 'horizontal' ? 'bg-blue-400' :
-                zone.type === 'vertical' ? 'bg-green-400' :
-                zone.type === 'center' ? 'bg-purple-400' : 'bg-gray-400'
-              } opacity-60`}
-              style={{ 
-                left: zone.x - 4, 
-                top: zone.y - 4,
-                zIndex: 5
-              }}
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 0.6 }}
-              exit={{ scale: 0, opacity: 0 }}
-            />
-          )
-        })}
-
-        {/* Connection Preview */}
-        {connectionPreview && (
-          <svg className="absolute inset-0 pointer-events-none" style={{ zIndex: 3 }}>
-            <motion.path
-              d={connectionPreview.path}
-              stroke="rgba(59, 130, 246, 0.8)"
-              strokeWidth="3"
-              fill="none"
-              strokeDasharray="8,4"
-              initial={{ pathLength: 0 }}
-              animate={{ pathLength: 1 }}
-              transition={{ duration: 0.3 }}
-            />
-          </svg>
-        )}
-
         {/* Blocks */}
         <AnimatePresence>
           {blocks.map((block) => (
             <motion.div
               key={block.id}
-              className={`absolute w-32 h-32 rounded-xl border-2 cursor-move select-none ${getBlockColor(block.type)} ${
-                selectedBlock?.id === block.id ? 'ring-2 ring-white shadow-lg' : ''
+              className={`absolute w-32 h-32 rounded-xl border-2 cursor-pointer select-none ${
+                getBlockColor(block.type)
               } ${
-                draggedBlockId === block.id ? 'opacity-90 scale-105 shadow-2xl' : ''
+                selectedBlock?.id === block.id 
+                  ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' 
+                  : ''
               } ${
-                magneticSnap?.targetBlock === block.id ? 'ring-2 ring-yellow-400 shadow-yellow-400/50' : ''
-              } ${
-                isSnapping ? 'ring-2 ring-blue-400 shadow-blue-400/50' : ''
-              } group transition-all duration-200`}
+                moveTarget === block.id
+                  ? 'opacity-70 scale-105' 
+                  : ''
+              }`}
               style={{ 
-                left: block.x, 
-                top: block.y,
-                zIndex: draggedBlockId === block.id ? 10 : 2,
-                userSelect: 'none',
-                WebkitUserSelect: 'none',
-                MozUserSelect: 'none',
-                msUserSelect: 'none',
-                transform: draggedBlockId === block.id ? 'rotate(2deg)' : 'rotate(0deg)',
-                filter: draggedBlockId === block.id ? 'drop-shadow(0 10px 20px rgba(0,0,0,0.3))' : 'none'
+                left: block.x * zoom + pan.x,
+                top: block.y * zoom + pan.y,
+                transform: `scale(${zoom})`,
+                transformOrigin: 'top left'
               }}
-              initial={{ scale: 0, opacity: 0, rotate: -180 }}
-              animate={{ 
-                scale: draggedBlockId === block.id ? 1.05 : 1, 
-                opacity: 1,
-                rotate: draggedBlockId === block.id ? 2 : 0
-              }}
-              exit={{ scale: 0, opacity: 0, rotate: 180 }}
-              whileHover={{ 
-                scale: draggedBlockId === block.id ? 1.05 : 1.08,
-                rotate: draggedBlockId === block.id ? 2 : 1
-              }}
-              whileTap={{ scale: 0.95 }}
-              onMouseDown={(e) => handleBlockDragStart(block.id, e)}
-              onMouseEnter={() => handleBlockHover(block.id, true)}
-              onMouseLeave={() => handleBlockHover(block.id, false)}
-              onClick={(e) => handleBlockClick(block, e)}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ duration: 0.2 }}
+              onClick={(e) => handleBlockClick(block.id, e)}
+              onDoubleClick={(e) => handleBlockDoubleClick(block.id, e)}
             >
-              <div className="p-4 h-full flex flex-col justify-center items-center text-center relative" style={{ userSelect: 'none' }}>
-                {/* Block Icon */}
-                <div className="text-3xl mb-2">
+              {/* Block Content */}
+              <div className="flex flex-col items-center justify-center h-full p-2">
+                <div className="text-2xl mb-1">
                   {getBlockIcon(block.type)}
                 </div>
-                
-                <h3 className="font-bold text-xs capitalize mb-1 leading-tight" style={{ userSelect: 'none' }}>
-                  {block.type.replace('_', ' ')}
-                </h3>
-                <div className="text-xs opacity-90" style={{ userSelect: 'none' }}>
-                  {block.metadata?.severity || 'medium'}
+                <div className="text-xs font-medium text-center leading-tight">
+                  {getBlockName(block.type)}
+                </div>
                 </div>
                 
-                {/* Delete Button */}
-                <motion.button
-                  className={`delete-button absolute -top-1 -right-1 w-8 h-8 bg-red-500/90 text-white rounded-full flex items-center justify-center shadow-lg z-20 hover:bg-red-600 hover:shadow-xl transition-all duration-200 ${
-                    showDeleteButton === block.id ? 'opacity-100 scale-100' : 'opacity-0 scale-75 pointer-events-none'
-                  }`}
-                  whileHover={{ scale: 1.15 }}
-                  whileTap={{ scale: 0.85 }}
-                  onClick={(e) => {
+              {/* Connection Points */}
+              <div className="absolute -right-2 top-1/2 transform -translate-y-1/2">
+                <button
+                  className="w-4 h-4 bg-primary rounded-full border-2 border-background hover:bg-primary/80 transition-colors"
+                  onMouseDown={(e) => handleConnectionStart(block.id, e)}
+                  onMouseUp={(e) => handleConnectionEnd(block.id, e)}
+                  title="Connect to other blocks"
+                />
+                </div>
+                
+              <div className="absolute -left-2 top-1/2 transform -translate-y-1/2">
+                <button
+                  className="w-4 h-4 bg-muted rounded-full border-2 border-background hover:bg-muted/80 transition-colors"
+                  onMouseUp={(e) => {
                     e.stopPropagation()
-                    e.preventDefault()
-                    if (window.confirm('Are you sure you want to delete this block?')) {
-                      deleteBlock(block.id)
-                    }
+                    handleConnectionEnd(block.id, e)
                   }}
-                  title="Delete block"
-                  style={{ userSelect: 'none' }}
-                >
-                  <X className="h-4 w-4" />
-                </motion.button>
+                  title="Connect from other blocks"
+                />
               </div>
 
-              {/* Connection points */}
-              <div 
-                className="absolute -right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 bg-white rounded-full cursor-pointer opacity-0 hover:opacity-100 transition-opacity border-2 border-gray-800"
-                onMouseDown={(e) => {
+              {/* Delete Button */}
+              <button
+                className="absolute -top-2 -right-2 w-6 h-6 bg-destructive text-destructive-foreground rounded-full border-2 border-background hover:bg-destructive/80 transition-colors flex items-center justify-center"
+                onClick={(e) => {
                   e.stopPropagation()
-                  handleConnectionStart(block.id)
+                  deleteBlock(block.id)
                 }}
-                title="Connect to other blocks"
-              />
-              <div 
-                className="absolute -left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 bg-white rounded-full cursor-pointer opacity-0 hover:opacity-100 transition-opacity border-2 border-gray-800"
-                onMouseUp={(e) => {
-                  e.stopPropagation()
-                  handleConnectionEnd(block.id)
-                }}
-                title="Connect from other blocks"
-              />
+                title="Delete Block"
+              >
+                <X className="w-3 h-3" />
+              </button>
             </motion.div>
           ))}
         </AnimatePresence>
 
-        {/* Delete All Blocks Button */}
-        {blocks.length > 0 && (
-          <motion.div
-            className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-30"
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-          >
-            <motion.button
-              onClick={handleDeleteAllBlocks}
-              className="flex items-center space-x-2 px-4 py-2 bg-red-600/90 hover:bg-red-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              style={{ userSelect: 'none' }}
-            >
-              <Trash2 className="h-5 w-5" />
-              <span>Delete All Blocks</span>
-            </motion.button>
-          </motion.div>
+        {/* Connections */}
+        <svg
+          className="absolute inset-0 pointer-events-none"
+          style={{ zIndex: 1 }}
+        >
+          {edges.map((edge, index) => {
+            const fromBlock = blocks.find(b => b.id === edge.from)
+            const toBlock = blocks.find(b => b.id === edge.to)
+            
+            if (!fromBlock || !toBlock) return null
+
+            const fromX = (fromBlock.x + 128) * zoom + pan.x
+            const fromY = (fromBlock.y + 64) * zoom + pan.y
+            const toX = toBlock.x * zoom + pan.x
+            const toY = (toBlock.y + 64) * zoom + pan.y
+
+            return (
+              <motion.line
+                key={index}
+                x1={fromX}
+                y1={fromY}
+                x2={toX}
+                y2={toY}
+                stroke="hsl(var(--primary))"
+                strokeWidth="2"
+                fill="none"
+                initial={{ pathLength: 0 }}
+                animate={{ pathLength: 1 }}
+                transition={{ duration: 0.3 }}
+              />
+            )
+          })}
+        </svg>
+
+        {/* Connection Preview */}
+        {connectingFrom && (
+          <svg className="absolute inset-0 pointer-events-none" style={{ zIndex: 2 }}>
+            <line
+              x1={(blocks.find(b => b.id === connectingFrom)?.x + 128) * zoom + pan.x}
+              y1={(blocks.find(b => b.id === connectingFrom)?.y + 64) * zoom + pan.y}
+              x2={0} // Will be updated by mouse position
+              y2={0} // Will be updated by mouse position
+              stroke="hsl(var(--primary))"
+              strokeWidth="2"
+              strokeDasharray="5,5"
+              fill="none"
+            />
+          </svg>
         )}
 
-        {/* Empty state */}
+        {/* Instructions */}
         {blocks.length === 0 && (
-          <motion.div
-            className="absolute inset-0 flex items-center justify-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-          >
-            <div className="text-center text-muted-foreground">
-              <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
-                <Plus className="h-12 w-12 text-primary" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">Empty Canvas</h3>
-              <p>Drag blocks from the palette to start building your scan workflow</p>
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="glass-card px-8 py-6 rounded-xl text-center">
+              <h3 className="text-lg font-semibold text-foreground mb-2">
+                Click to Place Blocks
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Select a block from the palette, then click anywhere on the canvas to place it.
+              </p>
             </div>
-          </motion.div>
+              </div>
+        )}
+
+        {/* Moving Instructions */}
+        {isMoving && selectedBlock && (
+          <div className="absolute top-20 left-1/2 transform -translate-x-1/2 pointer-events-none">
+            <div className="glass-card px-4 py-2 rounded-lg">
+              <p className="text-sm text-foreground">
+                Click anywhere to move the selected block
+              </p>
+            </div>
+          </div>
         )}
       </div>
 
-      {/* Toolbar */}
-      <div className="absolute top-4 right-4 flex space-x-2 z-10">
-        {/* Undo/Redo */}
-        <motion.button
-          onClick={undo}
-          disabled={historyIndex <= 0}
-          className="glass-card p-3 text-foreground hover:bg-primary/10 transition-colors rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          title="Undo (Ctrl+Z)"
-        >
-          <RotateCcw className="h-5 w-5" />
-        </motion.button>
-        
-        <motion.button
-          onClick={redo}
-          disabled={historyIndex >= history.length - 1}
-          className="glass-card p-3 text-foreground hover:bg-primary/10 transition-colors rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          title="Redo (Ctrl+Shift+Z)"
-        >
-          <RotateCw className="h-5 w-5" />
-        </motion.button>
-        
-        {/* Zoom Controls */}
-        <motion.button
-          onClick={() => handleZoom(0.1)}
-          className="glass-card p-3 text-foreground hover:bg-primary/10 transition-colors rounded-lg"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          title="Zoom In (Ctrl++)"
-        >
-          <ZoomIn className="h-5 w-5" />
-        </motion.button>
-        
-        <motion.button
-          onClick={() => handleZoom(-0.1)}
-          className="glass-card p-3 text-foreground hover:bg-primary/10 transition-colors rounded-lg"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          title="Zoom Out (Ctrl+-)"
-        >
-          <ZoomOut className="h-5 w-5" />
-        </motion.button>
-        
-        {/* Grid Toggle */}
-        <motion.button
-          onClick={() => setShowGrid(!showGrid)}
-          className={`glass-card p-3 transition-colors rounded-lg ${
-            showGrid ? 'text-primary bg-primary/10' : 'text-foreground hover:bg-primary/10'
-          }`}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          title="Toggle Grid"
-        >
-          <Grid className="h-5 w-5" />
-        </motion.button>
-        
-        {/* Project Controls */}
-        <motion.button
-          onClick={onSaveProject}
-          className="glass-card p-3 text-foreground hover:bg-primary/10 transition-colors rounded-lg"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          title="Save Project (Ctrl+S)"
-        >
-          <Save className="h-5 w-5" />
-        </motion.button>
-        
-        <motion.button
-          onClick={onLoadProject}
-          className="glass-card p-3 text-foreground hover:bg-primary/10 transition-colors rounded-lg"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          title="Load Project (Ctrl+O)"
-        >
-          <FolderOpen className="h-5 w-5" />
-        </motion.button>
-
-        <motion.button
-          onClick={onExportProject}
-          className="glass-card p-3 text-foreground hover:bg-primary/10 transition-colors rounded-lg"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          title="Export Project"
-        >
-          <Download className="h-5 w-5" />
-        </motion.button>
-
-        <motion.button
-          onClick={onImportProject}
-          className="glass-card p-3 text-foreground hover:bg-primary/10 transition-colors rounded-lg"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          title="Import Project"
-        >
-          <Upload className="h-5 w-5" />
-        </motion.button>
-      </div>
-
-      {/* Start Scan Button */}
-      <div className="absolute bottom-6 right-6 z-10">
-        <motion.button
-          onClick={handleStartScan}
-          disabled={blocks.length === 0}
-          className="bg-primary text-primary-foreground px-8 py-4 rounded-xl font-semibold text-lg flex items-center space-x-3 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors shadow-lg"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-        >
-          <Play className="h-6 w-6" />
-          <span>Start Scan</span>
-        </motion.button>
-      </div>
-      
-      {/* Validation Errors Modal */}
+      {/* Validation Errors */}
       <AnimatePresence>
-        {showValidation && validationErrors.length > 0 && (
+        {showValidation && (
           <motion.div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setShowValidation(false)}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="absolute bottom-4 right-4 z-20"
           >
-            <motion.div
-              className="glass-card p-6 rounded-2xl max-w-md mx-4"
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center space-x-3 mb-4">
-                <div className="w-10 h-10 bg-red-500/20 rounded-xl flex items-center justify-center">
-                  <AlertTriangle className="h-5 w-5 text-red-400" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-foreground">Validation Errors</h3>
-                  <p className="text-sm text-muted-foreground">Please fix these issues before starting the scan</p>
-                </div>
+            <div className="glass-card p-4 rounded-lg max-w-sm">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertTriangle className="w-4 h-4 text-destructive" />
+                <h4 className="font-semibold text-foreground">Validation Errors</h4>
               </div>
-              
-              <div className="space-y-2 mb-6">
-                {validationErrors.map((error, index) => (
-                  <div key={index} className="text-sm text-red-400 bg-red-500/10 p-2 rounded">
-                    {error}
-                  </div>
+              <div className="space-y-1">
+                {validateWorkflow().map((error, index) => (
+                  <p key={index} className="text-sm text-muted-foreground">
+                    • {error}
+                  </p>
                 ))}
               </div>
-              
-              <div className="flex justify-end">
-                <motion.button
-                  onClick={() => setShowValidation(false)}
-                  className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  OK
-                </motion.button>
               </div>
-            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Custom Delete All Confirmation Modal */}
+      {/* Delete All Modal */}
       <AnimatePresence>
         {showDeleteAllModal && (
           <motion.div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={cancelDeleteAll}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setShowDeleteAllModal(false)}
           >
             <motion.div
-              className="glass-card p-8 rounded-2xl max-w-md mx-4"
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="glass-card p-6 rounded-xl max-w-sm mx-4"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Header */}
-              <div className="flex items-center space-x-3 mb-6">
-                <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
-                  <Trash2 className="h-6 w-6 text-red-400" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-foreground">Delete All Blocks</h3>
-                  <p className="text-sm text-muted-foreground">This action cannot be undone</p>
-                </div>
-              </div>
-
-              {/* Content */}
-              <div className="mb-6">
-                <p className="text-foreground mb-4">
-                  Are you sure you want to delete all blocks? This will remove all blocks and connections from your canvas.
-                </p>
-                
-                {/* Checkbox */}
-                <div className="flex items-center space-x-3">
-                  <input
-                    type="checkbox"
-                    id="dontShowAgain"
-                    checked={dontShowAgain}
-                    onChange={(e) => setDontShowAgain(e.target.checked)}
-                    className="w-4 h-4 text-primary bg-input border-border rounded focus:ring-primary"
-                  />
-                  <label htmlFor="dontShowAgain" className="text-sm text-foreground">
-                    Don't show this confirmation again
-                  </label>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center justify-end space-x-3">
-                <motion.button
-                  onClick={cancelDeleteAll}
-                  className="px-6 py-2 glass-card text-foreground hover:bg-muted/20 rounded-lg transition-colors"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+              <h3 className="text-lg font-semibold text-foreground mb-2">
+                Delete All Blocks
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                This will permanently delete all blocks and connections. This action cannot be undone.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowDeleteAllModal(false)}
+                  className="flex-1 px-4 py-2 bg-muted text-muted-foreground rounded-lg hover:bg-muted/80 transition-colors"
                 >
                   Cancel
-                </motion.button>
-                <motion.button
-                  onClick={confirmDeleteAll}
-                  className="flex items-center space-x-2 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+                </button>
+                <button
+                  onClick={() => {
+                    deleteAllBlocks()
+                    setShowDeleteAllModal(false)
+                  }}
+                  className="flex-1 px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/80 transition-colors"
                 >
-                  <Trash2 className="h-4 w-4" />
-                  <span>Delete All</span>
-                </motion.button>
+                  Delete All
+                </button>
               </div>
             </motion.div>
           </motion.div>

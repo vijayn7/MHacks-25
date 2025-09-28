@@ -1,5 +1,6 @@
 "use client"
 
+
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
@@ -10,16 +11,16 @@ import {
   Lock, 
   AlertTriangle,
   Code,
-  Clock,
   Shield
 } from "lucide-react"
 
-const BlockPropertiesModal = ({ 
-  isOpen, 
-  onClose, 
-  block, 
-  onSave, 
-  onDelete 
+
+const BlockPropertiesModal = ({
+  isOpen,
+  onClose,
+  block,
+  onSave,
+  onDelete
 }) => {
   const [formData, setFormData] = useState({
     id: "",
@@ -33,6 +34,7 @@ const BlockPropertiesModal = ({
       mvp: true
     }
   })
+
 
   useEffect(() => {
     if (block) {
@@ -50,6 +52,7 @@ const BlockPropertiesModal = ({
       })
     }
   }, [block])
+
 
   const handleInputChange = (field, value) => {
     if (field.includes('.')) {
@@ -69,6 +72,7 @@ const BlockPropertiesModal = ({
     }
   }
 
+
   const handleInputsChange = (key, value) => {
     setFormData(prev => ({
       ...prev,
@@ -79,10 +83,12 @@ const BlockPropertiesModal = ({
     }))
   }
 
+
   // Check if input contains vault reference
   const isVaultRef = (value) => {
     return typeof value === 'string' && value.startsWith('vaultRef:')
   }
+
 
   // Mask vault reference for display
   const maskVaultRef = (value) => {
@@ -93,6 +99,7 @@ const BlockPropertiesModal = ({
     return value
   }
 
+
   const addInputField = () => {
     setFormData(prev => ({
       ...prev,
@@ -102,6 +109,7 @@ const BlockPropertiesModal = ({
       }
     }))
   }
+
 
   const removeInputField = (key) => {
     setFormData(prev => {
@@ -114,15 +122,18 @@ const BlockPropertiesModal = ({
     })
   }
 
+
   const handleSave = () => {
     onSave(formData)
     onClose()
   }
 
+
   const handleDelete = () => {
     onDelete(block.id)
     onClose()
   }
+
 
   const getBlockIcon = (type) => {
     const icons = {
@@ -135,20 +146,36 @@ const BlockPropertiesModal = ({
     return icons[type] || Settings
   }
 
+
   const getBlockColor = (type) => {
     const colors = {
-      credentialed_scan: "text-red-400",
-      logic_fuzzer: "text-orange-400",
-      llm_generator: "text-purple-400",
-      json_fuzzer: "text-blue-400",
-      supply_chain_scan: "text-green-400"
+      credentialed_scan: "text-pink-500",
+      logic_fuzzer: "text-orange-500",
+      llm_generator: "text-purple-500",
+      json_fuzzer: "text-blue-500",
+      supply_chain_scan: "text-green-500"
     }
-    return colors[type] || "text-gray-400"
+    return colors[type] || "text-gray-500"
   }
+
+
+  const getBlockDescription = (type) => {
+    const descriptions = {
+      credentialed_scan: "Tests authentication bypass, weak passwords, session fixation, and privilege escalation vulnerabilities",
+      logic_fuzzer: "Tests business logic flaws like price manipulation, quantity overflow, workflow bypass, and time-based vulnerabilities",
+      llm_generator: "Tests AI security including prompt injection, jailbreak attempts, data extraction, and AI-generated test cases",
+      json_fuzzer: "Tests API security with JSON injection, schema bypass, payload DoS, type confusion, and nested attacks",
+      supply_chain_scan: "Tests dependency security including vulnerable packages, typosquatting, license issues, integrity checks, and unused packages"
+    }
+    return descriptions[type] || "Configure this security test block"
+  }
+
 
   if (!isOpen || !block) return null
 
+
   const IconComponent = getBlockIcon(block.type)
+
 
   return (
     <AnimatePresence>
@@ -176,7 +203,10 @@ const BlockPropertiesModal = ({
                 <h2 className="text-2xl font-bold text-foreground">
                   {block.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
                 </h2>
-                <p className="text-muted-foreground">Configure block properties</p>
+                <p className="text-muted-foreground mb-2">Configure block properties</p>
+                <p className="text-sm text-muted-foreground/80 leading-relaxed max-w-md">
+                  {getBlockDescription(block.type)}
+                </p>
               </div>
             </div>
             <button
@@ -187,6 +217,7 @@ const BlockPropertiesModal = ({
             </button>
           </div>
 
+
           {/* Form */}
           <div className="space-y-6">
             {/* Basic Properties */}
@@ -195,7 +226,7 @@ const BlockPropertiesModal = ({
                 <Settings className="h-5 w-5 mr-2" />
                 Basic Properties
               </h3>
-              
+             
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
@@ -209,7 +240,7 @@ const BlockPropertiesModal = ({
                     placeholder="block-uuid"
                   />
                 </div>
-                
+               
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
                     Script Path
@@ -223,6 +254,7 @@ const BlockPropertiesModal = ({
                   />
                 </div>
               </div>
+
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -238,7 +270,7 @@ const BlockPropertiesModal = ({
                     max="3600"
                   />
                 </div>
-                
+               
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
                     Severity
@@ -257,6 +289,7 @@ const BlockPropertiesModal = ({
               </div>
             </div>
 
+
             {/* Inputs */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -271,7 +304,7 @@ const BlockPropertiesModal = ({
                   Add Input
                 </button>
               </div>
-              
+             
               <div className="space-y-3">
                 {Object.entries(formData.inputs).map(([key, value], index) => (
                   <div key={index} className="flex items-center space-x-3">
@@ -312,13 +345,14 @@ const BlockPropertiesModal = ({
               </div>
             </div>
 
+
             {/* Security Settings */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold text-foreground flex items-center">
                 <Shield className="h-5 w-5 mr-2" />
                 Security Settings
               </h3>
-              
+             
               <div className="flex items-center space-x-3">
                 <input
                   type="checkbox"
@@ -331,7 +365,7 @@ const BlockPropertiesModal = ({
                   Safe Mode (Non-destructive testing only)
                 </label>
               </div>
-              
+             
               <div className="flex items-center space-x-3">
                 <input
                   type="checkbox"
@@ -344,7 +378,7 @@ const BlockPropertiesModal = ({
                   MVP Block (Include in quick scans)
                 </label>
               </div>
-              
+             
               {/* Vault Reference Warning */}
               {Object.values(formData.inputs || {}).some(value => isVaultRef(value)) && (
                 <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4">
@@ -362,6 +396,7 @@ const BlockPropertiesModal = ({
             </div>
           </div>
 
+
           {/* Actions */}
           <div className="flex items-center justify-between mt-8 pt-6 border-t border-border/50">
             <motion.button
@@ -373,7 +408,7 @@ const BlockPropertiesModal = ({
               <Trash2 className="h-4 w-4" />
               <span>Delete Block</span>
             </motion.button>
-            
+           
             <div className="flex items-center space-x-3">
               <motion.button
                 onClick={onClose}
@@ -399,5 +434,6 @@ const BlockPropertiesModal = ({
     </AnimatePresence>
   )
 }
+
 
 export default BlockPropertiesModal

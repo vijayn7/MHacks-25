@@ -14,6 +14,7 @@ import SignupPage from "./pages/SignupPage"
 import ScanHistoryPage from "./pages/ScanHistoryPage"
 import { AuthProvider, useAuth } from "./context/AuthContext"
 import { api } from "./lib/api"
+import ErrorBoundary from "./components/ErrorBoundary"
 import "./index.css"
 
 const AppRoutes = () => {
@@ -218,12 +219,15 @@ const AppRoutes = () => {
 }
 
 function App() {
+  console.log('App component rendering')
   return (
-    <AuthProvider>
-      <Router>
-        <AppRoutes />
-      </Router>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <Router>
+          <AppRoutes />
+        </Router>
+      </AuthProvider>
+    </ErrorBoundary>
   )
 }
 
