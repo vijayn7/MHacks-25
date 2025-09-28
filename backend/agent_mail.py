@@ -37,8 +37,8 @@ def _normalize_email_list(value: Optional[str]) -> List[str]:
     return candidates
 
 
-def _coalesce_notify_email(email: Optional[str]) -> Optional[str]:
-    """Return a comma-separated list of recipients including the default notification email."""
+def _coalesce_notify_email(email: Optional[str]) -> List[str]:
+    """Return a list of recipients including the default notification email."""
 
     recipients = _normalize_email_list(email)
 
@@ -49,10 +49,7 @@ def _coalesce_notify_email(email: Optional[str]) -> Optional[str]:
         if default_lower not in seen:
             recipients.append(default_email)
 
-    if not recipients:
-        return None
-
-    return ", ".join(recipients)
+    return recipients
 
 
 async def prepare_scan_digest(run_id: str) -> Dict[str, Any]:
@@ -168,8 +165,8 @@ async def dispatch_post_scan_email(run_id: str, *, error_message: Optional[str] 
         digest["error"] = error_message
         logger.info("⚠️ Email will report scan failure for run %s", run_id)
 
-    recipient = digest.get("resolved_notify_email") or _coalesce_notify_email(digest.get("notify_email"))
-    if not recipient:
+    recipients = digest.get("resolved_notify_email") or _coalesce_notify_email(digest.get("notify_email"))
+    if not recipients:
         logger.warning("❌ No recipient email resolved for run %s; skipping Agent Mail dispatch", run_id)
         return
 
@@ -179,7 +176,7 @@ async def dispatch_post_scan_email(run_id: str, *, error_message: Optional[str] 
 
     subject = f"Swarm scan {status_value} for {digest.get('target_url', '')}".strip()
     
-    logger.info("📧 Preparing to send email to %s with subject: '%s'", recipient, subject)
+    logger.info("📧 Preparing to send email to %s with subject: '%s'", ", ".join(recipients), subject)
 
     # Generate email body from the scan digest
     logger.debug("🎨 Generating email HTML body for run %s", run_id)
@@ -198,19 +195,19 @@ async def dispatch_post_scan_email(run_id: str, *, error_message: Optional[str] 
         logger.info("📤 Sending email via Agent Mail API...")
         await client.inboxes.messages.send(
             inbox_id=AGENTMAIL_INBOX_ID,
-            to=recipient,
+            to=recipients,
             subject=subject,
             html=email_body,
         )
         
         logger.info("✅ Agent Mail email successfully sent for run %s to %s (subject: '%s')", 
-                   run_id, recipient, subject)
+                   run_id, ", ".join(recipients), subject)
         
     except Exception as exc:
-        logger.error("❌ Agent Mail dispatch failed for run %s to %s: %s", run_id, recipient, exc)
+        logger.error("❌ Agent Mail dispatch failed for run %s to %s: %s", run_id, ", ".join(recipients), exc)
         # Log additional context for debugging
         logger.debug("Failed email details - inbox_id: %s, recipient: %s, subject length: %d chars, body size: %d KB", 
-                    AGENTMAIL_INBOX_ID, recipient, len(subject), body_size_kb)
+                    AGENTMAIL_INBOX_ID, ", ".join(recipients), len(subject), body_size_kb)
         
         # Log specific API error details if available
         if hasattr(exc, 'status_code'):
