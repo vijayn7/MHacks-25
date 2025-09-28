@@ -7,14 +7,14 @@ const ConsentModal = ({ isOpen, onAccept, onDecline, targetUrl }) => {
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 z-50"
+          className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-start justify-center p-4 sm:p-6 pt-10 sm:pt-12 md:pt-16 overflow-y-auto z-50"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.3 }}
         >
           <motion.div
-            className="glass-card max-w-2xl w-full h-full rounded-2xl overflow-hidden max-h-[90vh] sm:max-h-[85vh] flex flex-col"
+            className="glass-card max-w-2xl w-full rounded-2xl overflow-hidden max-h-[90vh] sm:max-h-[82vh] flex flex-col shadow-2xl"
             initial={{ scale: 0.9, opacity: 0, y: 20 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0, y: 20 }}
