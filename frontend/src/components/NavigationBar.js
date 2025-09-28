@@ -1,116 +1,24 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
-import axios from "axios"
+import { useState, useEffect } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { Shield, Play, AlertTriangle, LogOut, User, ChevronDown } from "lucide-react"
-
-const STATUS_STYLES = {
-  queued: "bg-amber-500/10 text-amber-400",
-  running: "bg-sky-500/10 text-sky-400",
-  completed: "bg-emerald-500/10 text-emerald-400",
-  failed: "bg-rose-500/10 text-rose-400"
-}
-
-const formatStatusLabel = (status) => {
-  if (!status) return ""
-  return status.charAt(0).toUpperCase() + status.slice(1)
-}
-
-const formatDateTime = (value) => {
-  if (!value) return ""
-  try {
-    return new Date(value).toLocaleString(undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit"
-    })
-  } catch (error) {
-    return value
-  }
-}
+import { Shield, Play, AlertTriangle, LogOut, User } from "lucide-react"
 
 const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = false }) => {
   const location = useLocation()
   const navigate = useNavigate()
-  const isMountedRef = useRef(true)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
-  const [showResultsDropdown, setShowResultsDropdown] = useState(false)
-  const [showMobileResults, setShowMobileResults] = useState(false)
-  const [scanHistory, setScanHistory] = useState([])
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false)
-  const [historyError, setHistoryError] = useState(null)
-
   const isAuthenticated = Boolean(user)
   const canStartScan = isAuthenticated && !authLoading
   const isDashboardActive = location.pathname === "/"
-  const isResultsActive = location.pathname.startsWith("/scan/")
+  const isResultsActive =
+    location.pathname.startsWith("/scan/") || location.pathname === "/runs"
   const resultsDisabled = !isAuthenticated || authLoading
 
   useEffect(() => {
-    isMountedRef.current = true
-    return () => {
-      isMountedRef.current = false
-    }
-  }, [])
-
-  const fetchScanHistory = useCallback(async () => {
-    if (!isMountedRef.current) {
-      return
-    }
-
-    if (!isAuthenticated || authLoading) {
-      if (isMountedRef.current) {
-        setScanHistory([])
-        setHistoryError(null)
-        setIsLoadingHistory(false)
-      }
-      return
-    }
-
-    if (isMountedRef.current) {
-      setIsLoadingHistory(true)
-      setHistoryError(null)
-    }
-
-    try {
-      const response = await axios.get("/runs")
-      if (isMountedRef.current) {
-        setScanHistory(response.data || [])
-      }
-    } catch (error) {
-      if (!isMountedRef.current) {
-        return
-      }
-      if (error.response?.status === 401) {
-        setScanHistory([])
-      } else {
-        setHistoryError(error.response?.data?.detail || "Unable to load scan history")
-      }
-    } finally {
-      if (isMountedRef.current) {
-        setIsLoadingHistory(false)
-      }
-    }
-  }, [isAuthenticated, authLoading])
-
-  useEffect(() => {
-    fetchScanHistory()
-  }, [fetchScanHistory, currentScan?.runId])
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setScanHistory([])
-      setHistoryError(null)
-    }
-  }, [isAuthenticated])
-
-  useEffect(() => {
-    setShowResultsDropdown(false)
-    setShowMobileResults(false)
+    setIsMenuOpen(false)
   }, [location.pathname])
 
   const handleNewScanClick = () => {
@@ -147,99 +55,13 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
     }
   }
 
-  const handleToggleDesktopResults = async () => {
-    if (resultsDisabled) return
-    if (!showResultsDropdown && !isLoadingHistory) {
-      await fetchScanHistory()
+  const handleResultsClick = (event) => {
+    if (resultsDisabled) {
+      event.preventDefault()
+      if (!authLoading) {
+        navigate("/login")
+      }
     }
-    setShowResultsDropdown((prev) => !prev)
-  }
-
-  const handleToggleMobileResults = async () => {
-    if (resultsDisabled) return
-    if (!showMobileResults && !isLoadingHistory) {
-      await fetchScanHistory()
-    }
-    setShowMobileResults((prev) => !prev)
-  }
-
-  const handleSelectScan = () => {
-    setShowResultsDropdown(false)
-    setShowMobileResults(false)
-    setIsMenuOpen(false)
-  }
-
-  const renderHistoryList = () => {
-    if (isLoadingHistory) {
-      return (
-        <div className="py-6 text-center text-sm text-muted-foreground">
-          Loading scan history...
-        </div>
-      )
-    }
-
-    if (historyError) {
-      return (
-        <div className="py-6 px-4 text-sm text-rose-400">
-          {historyError}
-        </div>
-      )
-    }
-
-    if (!scanHistory.length) {
-      return (
-        <div className="py-6 px-4 text-sm text-muted-foreground">
-          No scans yet. Start a scan to see your history here.
-        </div>
-      )
-    }
-
-    return (
-      <div className="py-2">
-        {scanHistory.map((scan) => {
-          const isActiveScan = location.pathname === `/scan/${scan.id}`
-          return (
-            <Link
-              key={scan.id}
-              to={`/scan/${scan.id}`}
-              className="block"
-              onClick={handleSelectScan}
-            >
-              <div
-                className={`px-4 py-3 transition-colors rounded-lg ${
-                  isActiveScan
-                    ? "bg-primary/10 border border-primary/30"
-                    : "hover:bg-primary/5"
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">
-                      {scan.target_url}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Started {formatDateTime(scan.created_at)}
-                    </p>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Findings: <span className="font-medium text-foreground">{scan.finding_count ?? 0}</span>
-                      <span className="mx-1">•</span>
-                      Risk score: <span className="font-medium text-foreground">{scan.risk_score ?? 0}</span>
-                    </p>
-                  </div>
-                  <span
-                    className={`shrink-0 px-2 py-1 text-xs font-semibold rounded-full ${
-                      STATUS_STYLES[scan.status] || "bg-muted text-foreground/80"
-                    }`}
-                  >
-                    {formatStatusLabel(scan.status)}
-                  </span>
-                </div>
-              </div>
-            </Link>
-          )
-        })}
-      </div>
-    )
   }
 
   return (
@@ -297,52 +119,27 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
                 )}
               </Link>
 
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={handleToggleDesktopResults}
-                  className={`relative flex items-center space-x-1 text-sm font-medium transition-colors duration-200 ${
-                    resultsDisabled
-                      ? "text-foreground/30 cursor-not-allowed"
-                      : isResultsActive
-                      ? "text-primary"
-                      : "text-foreground/70 hover:text-foreground"
-                  }`}
-                  disabled={resultsDisabled}
-                >
-                  <span>Results</span>
-                  <ChevronDown
-                    className={`h-4 w-4 transition-transform ${
-                      showResultsDropdown ? "rotate-180" : "rotate-0"
-                    }`}
+              <Link
+                to="/runs"
+                onClick={handleResultsClick}
+                className={`relative text-sm font-medium transition-colors duration-200 ${
+                  resultsDisabled
+                    ? "text-foreground/30 cursor-not-allowed"
+                    : isResultsActive
+                    ? "text-primary"
+                    : "text-foreground/70 hover:text-foreground"
+                }`}
+              >
+                Results
+                {isResultsActive && !resultsDisabled && (
+                  <motion.div
+                    className="absolute -bottom-1 left-0 right-0 h-0.5 bg-primary"
+                    layoutId="activeTab"
+                    initial={false}
+                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
                   />
-                  {isResultsActive && !resultsDisabled && (
-                    <motion.div
-                      className="absolute -bottom-1 left-0 right-0 h-0.5 bg-primary"
-                      layoutId="activeTab"
-                      initial={false}
-                      transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                    />
-                  )}
-                </button>
-
-                <AnimatePresence>
-                  {showResultsDropdown && !resultsDisabled && (
-                    <motion.div
-                      key="results-dropdown"
-                      className="absolute right-0 mt-3 w-80 glass-card no-contain border border-border/50 rounded-xl shadow-2xl overflow-hidden z-40"
-                      initial={{ opacity: 0, y: -8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -8 }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      <div className="max-h-96 overflow-y-auto">
-                        {renderHistoryList()}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+                )}
+              </Link>
             </nav>
 
             {/* Auth Actions */}
@@ -450,43 +247,24 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
                     Dashboard
                   </Link>
 
-                  <div className="glass-card no-contain border border-border/50 rounded-lg">
-                    <button
-                      type="button"
-                      onClick={handleToggleMobileResults}
-                      className={`w-full flex items-center justify-between px-4 py-2 text-sm font-medium transition-colors ${
-                        resultsDisabled
-                          ? "text-foreground/30 cursor-not-allowed"
-                          : isResultsActive
-                          ? "text-primary"
-                          : "text-foreground/70 hover:text-foreground"
-                      }`}
-                      disabled={resultsDisabled}
-                    >
-                      <span>Results</span>
-                      <ChevronDown
-                        className={`h-4 w-4 transition-transform ${
-                          showMobileResults ? "rotate-180" : "rotate-0"
-                        }`}
-                      />
-                    </button>
-                    <AnimatePresence initial={false}>
-                      {showMobileResults && !resultsDisabled && (
-                        <motion.div
-                          key="mobile-results"
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: "auto" }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.2 }}
-                          className="border-t border-border/40"
-                        >
-                          <div className="max-h-80 overflow-y-auto">
-                            {renderHistoryList()}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
+                  <Link
+                    to="/runs"
+                    onClick={(event) => {
+                      handleResultsClick(event)
+                      if (!resultsDisabled) {
+                        setIsMenuOpen(false)
+                      }
+                    }}
+                    className={`glass-card px-4 py-2 text-sm font-medium border border-border/50 rounded-lg transition-colors ${
+                      resultsDisabled
+                        ? "text-foreground/30 cursor-not-allowed"
+                        : isResultsActive
+                        ? "text-primary"
+                        : "text-foreground/70 hover:text-foreground"
+                    }`}
+                  >
+                    Results
+                  </Link>
 
                   {isAuthenticated ? (
                     <>

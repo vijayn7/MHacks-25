@@ -11,6 +11,7 @@ import NavigationBar from "./components/NavigationBar"
 import ProtectedRoute from "./components/ProtectedRoute"
 import LoginPage from "./pages/LoginPage"
 import SignupPage from "./pages/SignupPage"
+import ScanHistoryPage from "./pages/ScanHistoryPage"
 import { AuthProvider, useAuth } from "./context/AuthContext"
 import { API_BASE_URL } from "./lib/api"
 import "./index.css"
@@ -159,6 +160,22 @@ const AppRoutes = () => {
                     transition={{ duration: 0.5 }}
                   >
                     <ScanResults />
+                  </motion.div>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/runs"
+              element={
+                <ProtectedRoute>
+                  <motion.div
+                    key="history"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.5 }}
+                  >
+                    <ScanHistoryPage />
                   </motion.div>
                 </ProtectedRoute>
               }
