@@ -7,6 +7,7 @@ import axios from "axios"
 import ScanDashboard from "./components/ScanDashboard"
 import ScanResults from "./components/ScanResults"
 import ConsentModal from "./components/ConsentModal"
+import NavigationBar from "./components/NavigationBar"
 import { Shield } from "lucide-react"
 import "./index.css"
 
@@ -40,6 +41,9 @@ function App() {
 
       setShowConsent(false)
       setPendingScanRequest(null)
+      
+      // Navigate to results page after successful scan start
+      window.location.href = `/scan/${response.data.run_id}`
     } catch (error) {
       console.error("Failed to start scan:", error)
       alert("Failed to start scan: " + (error.response?.data?.detail || error.message))
@@ -52,7 +56,7 @@ function App() {
   }
 
   const handleNewScan = () => {
-    setCurrentScan(null)
+    setCurrentScan(null); 
   }
 
   return (
@@ -71,57 +75,7 @@ function App() {
           <div className="absolute bottom-20 right-20 w-64 h-64 bg-primary/1 rounded-full blur-xl" />
         </div>
 
-        <motion.header
-          className="glass-card border-b border-border/50 relative z-10"
-          initial={{ y: -100, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.6, ease: "easeOut" }}
-        >
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center py-6">
-              <motion.div
-                className="flex items-center"
-                whileHover={{ scale: 1.02 }}
-                transition={{ type: "spring", stiffness: 400, damping: 10 }}
-              >
-                <div className="flex-shrink-0 mr-4">
-                  {/* Logo */}
-                  <motion.div
-                    className="w-12 h-12 rounded-xl flex items-center justify-center glass-card pulse-glow overflow-hidden"
-                    whileHover={{ scale: 1.1 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 10 }}
-                  >
-                    <img 
-                      src="/Favicon.png" 
-                      alt="Swarm Logo" 
-                      className="w-8 h-8 object-contain"
-                    />
-                  </motion.div>
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold gradient-text">Swarm</h1>
-                  <p className="text-sm text-muted-foreground font-medium">Advanced Security Scanner</p>
-                </div>
-              </motion.div>
-
-              <AnimatePresence>
-                {currentScan && (
-                  <motion.button
-                    onClick={handleNewScan}
-                    className="glass-card px-6 py-3 text-foreground hover:bg-primary/10 transition-all duration-300 font-medium rounded-lg border border-primary/20 hover:border-primary/40"
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    New Scan
-                  </motion.button>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-        </motion.header>
+        <NavigationBar currentScan={currentScan} onNewScan={handleNewScan} />
 
         <main className="max-w-7xl mx-auto py-8 sm:px-6 lg:px-8 relative z-10">
           <AnimatePresence mode="wait">
@@ -129,19 +83,15 @@ function App() {
               <Route
                 path="/"
                 element={
-                  currentScan ? (
-                    <Navigate to={`/scan/${currentScan.runId}`} replace />
-                  ) : (
-                    <motion.div
-                      key="dashboard"
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      transition={{ duration: 0.5 }}
-                    >
-                      <ScanDashboard onStartScan={handleStartScan} />
-                    </motion.div>
-                  )
+                  <motion.div
+                    key="dashboard"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.5 }}
+                  >
+                    <ScanDashboard onStartScan={handleStartScan} />
+                  </motion.div>
                 }
               />
               <Route
