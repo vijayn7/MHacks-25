@@ -59,7 +59,7 @@ const ScanResults = ({ currentScan }) => {
     try {
       setDynamicScanning(true);
       setNewAIFindings(0); // Reset counter for new analysis
-      const response = await axios.post(`http://localhost:8000/runs/${runId}/dynamic-scan`, {
+      const response = await axios.post(`${API_BASE_URL}/runs/${runId}/dynamic-scan`, {
         codebase_path: codebasePath.trim()
       });
       if (response.data.status === 'completed') {
@@ -89,7 +89,7 @@ const ScanResults = ({ currentScan }) => {
     }
 
     try {
-      const response = await axios.patch(`/runs/${runId}`, {
+      const response = await axios.patch(`${API_BASE_URL}/runs/${runId}`, {
         name: newName.trim()
       });
       
@@ -109,7 +109,7 @@ const ScanResults = ({ currentScan }) => {
 
     setIsDeleting(true);
     try {
-      await axios.delete(`/runs/${runId}`);
+      await axios.delete(`${API_BASE_URL}/runs/${runId}`);
       alert('Scan deleted successfully');
       navigate('/runs'); // Redirect to history page
     } catch (error) {
@@ -122,7 +122,7 @@ const ScanResults = ({ currentScan }) => {
 
   const fetchScanStatus = useCallback(async () => {
     try {
-      const response = await axios.get(`/runs/${runId}`);
+      const response = await axios.get(`${API_BASE_URL}/runs/${runId}`);
       setScanStatus(response.data);
       setLoading(false);
     } catch (error) {
@@ -137,7 +137,7 @@ const ScanResults = ({ currentScan }) => {
   const fetchFindings = useCallback(async () => {
     try {
       console.log(`🔍 Fetching findings for run ${runId}`);
-      const response = await axios.get(`/runs/${runId}/findings`);
+      const response = await axios.get(`${API_BASE_URL}/runs/${runId}/findings`);
       console.log(`✅ Found ${response.data.length} findings:`, response.data.slice(0, 3));
       setFindings(response.data);
     } catch (error) {
@@ -244,7 +244,7 @@ const ScanResults = ({ currentScan }) => {
 
   const handleReplay = async (findingId) => {
     try {
-      const response = await axios.post(`/runs/${runId}/findings/${findingId}/replay`);
+      const response = await axios.post(`${API_BASE_URL}/runs/${runId}/findings/${findingId}/replay`);
       alert('Replay completed: ' + response.data.message);
     } catch (error) {
       console.error('Failed to replay finding:', error);
