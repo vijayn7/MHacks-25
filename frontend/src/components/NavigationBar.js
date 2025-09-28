@@ -20,8 +20,8 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
 
   const navItems = [
     { name: "Dashboard", path: "/" },
-    { name: "Blocks", path: "/blocks" },
     { name: "Results", path: "/runs" },
+    { name: "Build", path: "/build" }
   ]
 
   const isActive = (path) => {
@@ -31,8 +31,8 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
     if (path === "/runs") {
       return location.pathname === "/runs" || location.pathname.startsWith("/scan/")
     }
-    if (path === "/blocks") {
-      return location.pathname === "/blocks"
+    if (path === "/build") {
+      return location.pathname === "/build"
     }
     return location.pathname === path
   }
