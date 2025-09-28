@@ -20,6 +20,27 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
   useEffect(() => {
     setIsMenuOpen(false)
   }, [location.pathname])
+  // Check if we're currently on a scan results page
+  const isOnScanResults = location.pathname.startsWith("/scan/")
+
+  const navItems = [
+    { name: "Dashboard", path: "/" },
+    { name: "Results", path: "/results" },
+    { name: "Build", path: "/build" }
+  ]
+
+  const isActive = (path) => {
+    if (path === "/") {
+      return location.pathname === "/"
+    }
+    if (path === "/results") {
+      return location.pathname === "/results" || location.pathname.startsWith("/scan/")
+    }
+    if (path === "/build") {
+      return location.pathname === "/build"
+    }
+    return location.pathname === path
+  }
 
   const handleNewScanClick = () => {
     if (!canStartScan) {
@@ -140,6 +161,27 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
                   />
                 )}
               </Link>
+              {navItems.map((item) => (
+                <Link
+                  key={item.name}
+                  to={item.path}
+                  className={`relative text-sm font-medium transition-colors duration-200 ${
+                    isActive(item.path)
+                      ? "text-primary"
+                      : "text-foreground/70 hover:text-foreground"
+                  }`}
+                >
+                  {item.name}
+                  {isActive(item.path) && (
+                    <motion.div
+                      className="absolute -bottom-1 left-0 right-0 h-0.5 bg-primary"
+                      layoutId="activeTab"
+                      initial={false}
+                      transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                    />
+                  )}
+                </Link>
+              ))}
             </nav>
 
             {/* Auth Actions */}
@@ -234,7 +276,8 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
                     className={`text-sm font-medium transition-colors duration-200 ${
                       !isAuthenticated || authLoading
                         ? "text-foreground/30 cursor-not-allowed"
-                        : isDashboardActive
+                        : isDashboardActive,
+                      isActive(item.path)
                         ? "text-primary"
                         : "text-foreground/70 hover:text-foreground"
                     }`}

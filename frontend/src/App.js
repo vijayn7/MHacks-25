@@ -3,7 +3,6 @@
 import { useState } from "react"
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import axios from "axios"
 import ScanDashboard from "./components/ScanDashboard"
 import ScanResults from "./components/ScanResults"
 import ConsentModal from "./components/ConsentModal"
@@ -13,11 +12,8 @@ import LoginPage from "./pages/LoginPage"
 import SignupPage from "./pages/SignupPage"
 import ScanHistoryPage from "./pages/ScanHistoryPage"
 import { AuthProvider, useAuth } from "./context/AuthContext"
-import { API_BASE_URL } from "./lib/api"
+import { api } from "./lib/api"
 import "./index.css"
-
-axios.defaults.baseURL = API_BASE_URL
-axios.defaults.withCredentials = true
 
 const AppRoutes = () => {
   const [currentScan, setCurrentScan] = useState(null)
@@ -35,13 +31,16 @@ const AppRoutes = () => {
     if (!pendingScanRequest) return
 
     try {
-      const response = await axios.post("/runs", {
-        ...pendingScanRequest,
-        consent: true,
+      const response = await api("/runs", {
+        method: "POST",
+        body: JSON.stringify({
+          ...pendingScanRequest,
+          consent: true,
+        }),
       })
 
       setCurrentScan({
-        runId: response.data.run_id,
+        runId: response.run_id,
         targetUrl: pendingScanRequest.target_url,
         status: "queued",
       })
@@ -49,13 +48,13 @@ const AppRoutes = () => {
       setShowConsent(false)
       setPendingScanRequest(null)
 
-      navigate(`/scan/${response.data.run_id}`)
+      navigate(`/scan/${response.run_id}`)
     } catch (error) {
       console.error("Failed to start scan:", error)
-      if (error.response?.status === 401) {
+      if (error.message.includes('401') || error.message.includes('unauthorized')) {
         navigate("/login")
       } else {
-        alert("Failed to start scan: " + (error.response?.data?.detail || error.message))
+        alert("Failed to start scan: " + error.message)
       }
     }
   }
@@ -153,7 +152,7 @@ const AppRoutes = () => {
               element={
                 <ProtectedRoute>
                   <motion.div
-                    key="results"
+                    key="scan-results"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
