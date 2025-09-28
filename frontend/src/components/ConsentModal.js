@@ -1,26 +1,26 @@
 "use client"
 import { motion, AnimatePresence } from "framer-motion"
-import { AlertTriangle, X } from "lucide-react"
+import { AlertTriangle, CheckCircle2, X } from "lucide-react"
 
 const ConsentModal = ({ isOpen, onAccept, onDecline, targetUrl }) => {
   return (
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 z-50"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.3 }}
         >
           <motion.div
-            className="glass-card max-w-2xl w-full rounded-2xl overflow-hidden max-h-[calc(100vh-2rem)] flex flex-col"
+            className="glass-card max-w-2xl w-full h-full rounded-2xl overflow-hidden max-h-[90vh] sm:max-h-[85vh] flex flex-col"
             initial={{ scale: 0.9, opacity: 0, y: 20 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0, y: 20 }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
           >
-            <div className="p-8 overflow-y-auto flex-1">
+            <div className="p-6 sm:p-8 overflow-y-auto flex-1">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center space-x-4">
                   <motion.div
@@ -68,7 +68,7 @@ const ConsentModal = ({ isOpen, onAccept, onDecline, targetUrl }) => {
                 </motion.div>
 
                 <motion.ul
-                  className="space-y-3 text-muted-foreground"
+                  className="space-y-4 text-muted-foreground"
                   initial={{ y: 20, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ delay: 0.3 }}
@@ -86,7 +86,7 @@ const ConsentModal = ({ isOpen, onAccept, onDecline, targetUrl }) => {
                       animate={{ x: 0, opacity: 1 }}
                       transition={{ delay: 0.4 + index * 0.1 }}
                     >
-                      <span className="text-primary font-bold mt-1">•</span>
+                      <CheckCircle2 className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                       <span className="leading-relaxed">{item}</span>
                     </motion.li>
                   ))}
