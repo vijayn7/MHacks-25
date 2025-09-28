@@ -1,10 +1,10 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useCallback } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import axios from "axios"
 import { motion } from "framer-motion"
-import { History, RefreshCw, ArrowRight, AlertTriangle, Clock } from "lucide-react"
+import { History, RefreshCw, ArrowRight, AlertTriangle, Clock, Search, Filter, X, Trash2 } from "lucide-react"
 
 const STATUS_STYLES = {
   queued: "bg-amber-500/10 text-amber-400 border border-amber-500/20",
@@ -34,10 +34,14 @@ const ScanHistoryPage = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState("")
+  const [showFilters, setShowFilters] = useState(false)
+  const [deletingRunId, setDeletingRunId] = useState(null)
 
   const hasRuns = runs.length > 0
 
-  const fetchRuns = async (isRefresh = false) => {
+  const fetchRuns = useCallback(async (isRefresh = false) => {
     if (isRefresh) {
       setIsRefreshing(true)
     } else {
@@ -46,7 +50,15 @@ const ScanHistoryPage = () => {
     setError(null)
 
     try {
-      const response = await axios.get("/runs")
+      const params = new URLSearchParams()
+      if (searchQuery.trim()) {
+        params.append('search', searchQuery.trim())
+      }
+      if (statusFilter) {
+        params.append('status', statusFilter)
+      }
+      
+      const response = await axios.get(`/runs?${params.toString()}`)
       setRuns(Array.isArray(response.data) ? response.data : [])
     } catch (err) {
       if (err.response?.status === 401) {
@@ -58,12 +70,66 @@ const ScanHistoryPage = () => {
       setLoading(false)
       setIsRefreshing(false)
     }
+  }, [searchQuery, statusFilter, navigate])
+
+  const handleSearchChange = (e) => {
+    setSearchQuery(e.target.value)
+  }
+
+  const handleStatusFilterChange = (e) => {
+    setStatusFilter(e.target.value)
+  }
+
+  const clearFilters = () => {
+    setSearchQuery("")
+    setStatusFilter("")
+  }
+
+  const handleSearch = () => {
+    fetchRuns()
+  }
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleSearch()
+    }
+  }
+
+  const handleDeleteRun = async (runId, e) => {
+    e.stopPropagation() // Prevent navigation when clicking delete
+    
+    if (!window.confirm('Are you sure you want to delete this scan? This action cannot be undone and will delete all findings and data associated with this scan.')) {
+      return
+    }
+
+    setDeletingRunId(runId)
+    try {
+      await axios.delete(`/runs/${runId}`)
+      // Remove the deleted run from the local state
+      setRuns(runs.filter(run => run.id !== runId))
+    } catch (error) {
+      console.error('Delete error:', error)
+      alert('Failed to delete scan: ' + (error.response?.data?.detail || error.message))
+    } finally {
+      setDeletingRunId(null)
+    }
   }
 
   useEffect(() => {
     fetchRuns()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Auto-search when filters change (with debounce)
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (searchQuery || statusFilter) {
+        fetchRuns()
+      }
+    }, 300)
+
+    return () => clearTimeout(timeoutId)
+  }, [searchQuery, statusFilter, fetchRuns])
 
   const summaryStats = useMemo(() => {
     if (!runs.length) {
@@ -100,16 +166,83 @@ const ScanHistoryPage = () => {
             how many findings were detected, and the overall risk scores.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => fetchRuns(true)}
-          disabled={loading || isRefreshing}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border/50 text-sm font-medium text-foreground hover:bg-muted/30 transition disabled:opacity-50"
-        >
-          <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowFilters(!showFilters)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border/50 text-sm font-medium text-foreground hover:bg-muted/30 transition"
+          >
+            <Filter className="w-4 h-4" />
+            Filters
+          </button>
+          <button
+            type="button"
+            onClick={() => fetchRuns(true)}
+            disabled={loading || isRefreshing}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border/50 text-sm font-medium text-foreground hover:bg-muted/30 transition disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
+        </div>
       </div>
+
+      {/* Search and Filter Section */}
+      {showFilters && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          exit={{ opacity: 0, height: 0 }}
+          className="glass-card p-6 rounded-2xl border border-border/50"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label htmlFor="search" className="block text-sm font-medium text-foreground mb-2">
+                Search
+              </label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  id="search"
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Search by name or URL..."
+                  className="w-full pl-10 pr-4 py-2 bg-input border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="status" className="block text-sm font-medium text-foreground mb-2">
+                Status
+              </label>
+              <select
+                id="status"
+                value={statusFilter}
+                onChange={handleStatusFilterChange}
+                className="w-full px-3 py-2 bg-input border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              >
+                <option value="">All Statuses</option>
+                <option value="queued">Queued</option>
+                <option value="running">Running</option>
+                <option value="completed">Completed</option>
+                <option value="failed">Failed</option>
+              </select>
+            </div>
+            <div className="flex items-end">
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-border/50 text-sm font-medium text-foreground hover:bg-muted/30 transition"
+              >
+                <X className="w-4 h-4" />
+                Clear Filters
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       <motion.div
         className="grid grid-cols-1 md:grid-cols-3 gap-4"
@@ -176,11 +309,12 @@ const ScanHistoryPage = () => {
         ) : (
           <div className="divide-y divide-border/50">
             <div className="grid grid-cols-12 gap-4 px-6 py-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              <span className="col-span-5">Target</span>
+              <span className="col-span-4">Target</span>
               <span className="col-span-2">Status</span>
               <span className="col-span-2">Findings</span>
               <span className="col-span-2">Risk Score</span>
               <span className="col-span-1 text-right">Started</span>
+              <span className="col-span-1 text-center">Actions</span>
             </div>
             <div className="divide-y divide-border/40">
               {runs.map((run) => (
@@ -191,9 +325,16 @@ const ScanHistoryPage = () => {
                   className="w-full text-left px-6 py-5 transition hover:bg-primary/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                 >
                   <div className="grid grid-cols-12 gap-4 items-center">
-                    <div className="col-span-5 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{run.target_url}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">Run ID: {run.id}</p>
+                    <div className="col-span-4 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {run.name || run.target_url}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {run.name ? `Target: ${run.target_url}` : `Run ID: ${run.id}`}
+                      </p>
+                      {run.name && (
+                        <p className="mt-1 text-xs text-muted-foreground">Run ID: {run.id}</p>
+                      )}
                     </div>
                     <div className="col-span-2">
                       <span
@@ -212,6 +353,18 @@ const ScanHistoryPage = () => {
                     </div>
                     <div className="col-span-1 text-right text-xs text-muted-foreground">
                       {formatDateTime(run.created_at)}
+                    </div>
+                    <div className="col-span-1 text-center">
+                      <motion.button
+                        onClick={(e) => handleDeleteRun(run.id, e)}
+                        disabled={deletingRunId === run.id}
+                        className="p-1 text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        title="Delete scan"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </motion.button>
                     </div>
                   </div>
                 </button>

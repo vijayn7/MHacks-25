@@ -22,9 +22,9 @@ from database import (
     startup_db, shutdown_db, get_database,
     create_scan_run, get_scan_run, update_scan_run,
     create_finding, get_findings_by_run, get_finding,
-    get_scan_runs_by_user
+    get_scan_runs_by_user, get_pages_by_run
 )
-from models import CreateScanRequest, ScanRunResponse, FindingResponse, ScanEvent, ScanStatus
+from models import CreateScanRequest, ScanRunResponse, FindingResponse, ScanEvent, ScanStatus, UpdateScanRunRequest
 from agent_mail import dispatch_post_scan_email
 import sys
 from pathlib import Path
@@ -297,6 +297,7 @@ async def create_scan(
     scan_data = {
         "id": run_id,
         "target_url": str(scan_request.target_url),
+        "name": scan_request.name,
         "status": ScanStatus.QUEUED,
         "max_pages": scan_request.max_pages,
         "notify_email": notify_email,
@@ -315,8 +316,25 @@ async def create_scan(
     return {"run_id": run_id, "status": "queued"}
 
 @app.get("/runs", response_model=List[ScanRunResponse])
-async def list_scan_runs(user=Depends(get_current_user)):
+async def list_scan_runs(
+    user=Depends(get_current_user),
+    search: Optional[str] = None,
+    status: Optional[str] = None
+):
     runs = await get_scan_runs_by_user(user["id"])
+
+    # Apply search filter if provided
+    if search:
+        search_lower = search.lower()
+        runs = [
+            run for run in runs 
+            if (run.name and search_lower in run.name.lower()) or 
+               search_lower in run.target_url.lower()
+        ]
+
+    # Apply status filter if provided
+    if status:
+        runs = [run for run in runs if run.status == status]
 
     responses = []
     for run in runs:
@@ -325,6 +343,7 @@ async def list_scan_runs(user=Depends(get_current_user)):
             ScanRunResponse(
                 id=run.id,
                 target_url=run.target_url,
+                name=run.name,
                 status=run.status,
                 created_at=run.created_at,
                 completed_at=run.completed_at,
@@ -351,12 +370,95 @@ async def get_scan_status(run_id: str, user=Depends(get_current_user)):
     return ScanRunResponse(
         id=scan_run.id,
         target_url=scan_run.target_url,
+        name=scan_run.name,
         status=scan_run.status,
         created_at=scan_run.created_at,
         completed_at=scan_run.completed_at,
         risk_score=scan_run.risk_score,
         finding_count=finding_count
     )
+
+@app.patch("/runs/{run_id}", response_model=ScanRunResponse)
+async def update_scan_run_endpoint(
+    run_id: str, 
+    update_request: UpdateScanRunRequest,
+    user=Depends(get_current_user)
+):
+    """Update a scan run (currently supports renaming)"""
+    scan_run = await get_scan_run(run_id)
+    if not scan_run:
+        raise HTTPException(status_code=404, detail="Scan run not found")
+
+    if scan_run.user_id != user["id"]:
+        raise HTTPException(status_code=404, detail="Scan run not found")
+
+    # Update the scan run with the provided data
+    update_data = {}
+    if update_request.name is not None:
+        update_data["name"] = update_request.name
+
+    if update_data:
+        updated_run = await update_scan_run(run_id, update_data)
+        if not updated_run:
+            raise HTTPException(status_code=500, detail="Failed to update scan run")
+
+        # Get updated findings count
+        findings = await get_findings_by_run(run_id)
+        finding_count = len(findings)
+
+        return ScanRunResponse(
+            id=updated_run.id,
+            target_url=updated_run.target_url,
+            name=updated_run.name,
+            status=updated_run.status,
+            created_at=updated_run.created_at,
+            completed_at=updated_run.completed_at,
+            risk_score=updated_run.risk_score,
+            finding_count=finding_count
+        )
+    else:
+        # No updates provided, return current state
+        findings = await get_findings_by_run(run_id)
+        finding_count = len(findings)
+        
+        return ScanRunResponse(
+            id=scan_run.id,
+            target_url=scan_run.target_url,
+            name=scan_run.name,
+            status=scan_run.status,
+            created_at=scan_run.created_at,
+            completed_at=scan_run.completed_at,
+            risk_score=scan_run.risk_score,
+            finding_count=finding_count
+        )
+
+@app.delete("/runs/{run_id}")
+async def delete_scan_run(run_id: str, user=Depends(get_current_user)):
+    """Delete a scan run and all associated data"""
+    scan_run = await get_scan_run(run_id)
+    if not scan_run:
+        raise HTTPException(status_code=404, detail="Scan run not found")
+
+    if scan_run.user_id != user["id"]:
+        raise HTTPException(status_code=404, detail="Scan run not found")
+
+    try:
+        # Delete all associated findings
+        findings = await get_findings_by_run(run_id)
+        for finding in findings:
+            await finding.delete()
+
+        # Delete all associated scanned pages
+        pages = await get_pages_by_run(run_id)
+        for page in pages:
+            await page.delete()
+
+        # Delete the scan run itself
+        await scan_run.delete()
+
+        return {"message": "Scan run deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete scan run: {str(e)}")
 
 @app.get("/runs/{run_id}/findings", response_model=List[FindingResponse])
 async def get_scan_findings(run_id: str, user=Depends(get_current_user)):

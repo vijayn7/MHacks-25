@@ -18,6 +18,10 @@ import {
   Search,
   Settings,
   Play,
+  Edit3,
+  Save,
+  X,
+  Trash2,
 } from "lucide-react"
 import { API_BASE_URL } from "../lib/api"
 
@@ -33,6 +37,9 @@ const ScanResults = ({ currentScan }) => {
   const [codebasePath, setCodebasePath] = useState('');
   const [dynamicScanning, setDynamicScanning] = useState(false);
   const [newAIFindings, setNewAIFindings] = useState(0);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Handle navigation functions for "No Scans Found" message
   const handleDashboardClick = () => {
@@ -62,6 +69,54 @@ const ScanResults = ({ currentScan }) => {
       console.error('Dynamic scan error:', error);
       alert('Dynamic scan failed: ' + (error.response?.data?.detail || error.message));
       setDynamicScanning(false);
+    }
+  };
+
+  const handleStartRename = () => {
+    setIsRenaming(true);
+    setNewName(scanStatus?.name || '');
+  };
+
+  const handleCancelRename = () => {
+    setIsRenaming(false);
+    setNewName('');
+  };
+
+  const handleSaveRename = async () => {
+    if (!newName.trim()) {
+      alert('Please enter a name for the scan instance');
+      return;
+    }
+
+    try {
+      const response = await axios.patch(`/runs/${runId}`, {
+        name: newName.trim()
+      });
+      
+      setScanStatus(response.data);
+      setIsRenaming(false);
+      setNewName('');
+    } catch (error) {
+      console.error('Rename error:', error);
+      alert('Failed to rename scan instance: ' + (error.response?.data?.detail || error.message));
+    }
+  };
+
+  const handleDeleteScan = async () => {
+    if (!window.confirm('Are you sure you want to delete this scan? This action cannot be undone and will delete all findings and data associated with this scan.')) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      await axios.delete(`/runs/${runId}`);
+      alert('Scan deleted successfully');
+      navigate('/runs'); // Redirect to history page
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert('Failed to delete scan: ' + (error.response?.data?.detail || error.message));
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -155,7 +210,7 @@ const ScanResults = ({ currentScan }) => {
       eventSource.close();
     };
 
-  }, [runId, fetchFindings, fetchScanStatus]);
+  }, [runId, fetchFindings, fetchScanStatus, currentScan, navigate]);
 
   const getSeverityColor = (severity) => {
     switch (severity) {
@@ -323,9 +378,112 @@ const ScanResults = ({ currentScan }) => {
             </motion.div>
             <div>
               <h1 className="text-3xl font-bold text-foreground mb-2">Security Scan Results</h1>
-              <p className="text-muted-foreground text-lg">
-                Target: <span className="font-semibold text-foreground">{scanStatus.target_url}</span>
-              </p>
+              <div className="flex items-center gap-3 mb-2">
+                <p className="text-muted-foreground text-lg">
+                  Target: <span className="font-semibold text-foreground">{scanStatus.target_url}</span>
+                </p>
+                {!isRenaming && (
+                  <div className="flex items-center gap-2">
+                    <motion.button
+                      onClick={handleStartRename}
+                      className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      title="Rename scan instance"
+                    >
+                      <Edit3 className="h-4 w-4" />
+                    </motion.button>
+                    <motion.button
+                      onClick={handleDeleteScan}
+                      disabled={isDeleting}
+                      className="p-1 text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      title="Delete scan instance"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </motion.button>
+                  </div>
+                )}
+              </div>
+              {scanStatus.name && (
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground text-sm">Instance Name:</span>
+                  {isRenaming ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                        className="px-2 py-1 text-sm bg-background/50 border border-border rounded focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        placeholder="Enter instance name"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveRename();
+                          if (e.key === 'Escape') handleCancelRename();
+                        }}
+                      />
+                      <motion.button
+                        onClick={handleSaveRename}
+                        className="p-1 text-green-400 hover:text-green-300 transition-colors"
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        title="Save name"
+                      >
+                        <Save className="h-4 w-4" />
+                      </motion.button>
+                      <motion.button
+                        onClick={handleCancelRename}
+                        className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        title="Cancel"
+                      >
+                        <X className="h-4 w-4" />
+                      </motion.button>
+                    </div>
+                  ) : (
+                    <span className="font-semibold text-foreground">{scanStatus.name}</span>
+                  )}
+                </div>
+              )}
+              {!scanStatus.name && isRenaming && (
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground text-sm">Instance Name:</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      className="px-2 py-1 text-sm bg-background/50 border border-border rounded focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      placeholder="Enter instance name"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveRename();
+                        if (e.key === 'Escape') handleCancelRename();
+                      }}
+                    />
+                    <motion.button
+                      onClick={handleSaveRename}
+                      className="p-1 text-green-400 hover:text-green-300 transition-colors"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      title="Save name"
+                    >
+                      <Save className="h-4 w-4" />
+                    </motion.button>
+                    <motion.button
+                      onClick={handleCancelRename}
+                      className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      title="Cancel"
+                    >
+                      <X className="h-4 w-4" />
+                    </motion.button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <div className="text-right">

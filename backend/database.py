@@ -17,6 +17,7 @@ DATABASE_NAME = os.getenv("DATABASE_NAME", "swarm_db")
 class ScanRun(Document):
     id: str = Field(alias="_id")
     target_url: str
+    name: Optional[str] = None  # User-defined name for the scan instance
     status: str = "queued"  # queued, running, completed, failed
     created_at: datetime = Field(default_factory=datetime.now)
     completed_at: Optional[datetime] = None
