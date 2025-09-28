@@ -83,7 +83,7 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
   return (
     <>
       <motion.header
-        className="glass-card no-contain border-b border-border/50 sticky top-0 z-30"
+        className="glass-card no-contain border-b border-border/50 fixed top-0 left-0 right-0 z-40"
         initial={{ y: -100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.6, ease: "easeOut" }}

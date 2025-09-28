@@ -100,7 +100,7 @@ const AppRoutes = () => {
         authLoading={loading}
       />
 
-      <main className="max-w-7xl mx-auto py-8 sm:px-6 lg:px-8 relative z-10">
+      <main className="max-w-7xl mx-auto pt-28 pb-8 sm:px-6 lg:px-8 relative z-10">
         <AnimatePresence mode="wait">
           <Routes>
             <Route
