@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { Shield, Play, AlertTriangle, LogOut, User } from "lucide-react"
@@ -10,29 +10,16 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
   const navigate = useNavigate()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
-
   const isAuthenticated = Boolean(user)
   const canStartScan = isAuthenticated && !authLoading
+  const isDashboardActive = location.pathname === "/"
+  const isResultsActive =
+    location.pathname.startsWith("/scan/") || location.pathname === "/runs"
+  const resultsDisabled = !isAuthenticated || authLoading
 
-  // Check if we're currently on a scan results page
-  const isOnScanResults = location.pathname.startsWith("/scan/")
-
-  const navItems = [
-    { name: "Dashboard", path: "/", disabled: !isAuthenticated || authLoading },
-    {
-      name: "Results",
-      path: currentScan ? `/scan/${currentScan.runId}` : (isOnScanResults ? location.pathname : "/"),
-      disabled: !isAuthenticated || authLoading || (!currentScan && !isOnScanResults)
-    }
-  ]
-
-  const isActive = (path) => {
-    if (path === "/") {
-      return location.pathname === "/"
-    }
-    // For Results tab, show as active when on any scan results page
-    return location.pathname.startsWith("/scan/")
-  }
+  useEffect(() => {
+    setIsMenuOpen(false)
+  }, [location.pathname])
 
   const handleNewScanClick = () => {
     if (!canStartScan) {
@@ -42,11 +29,9 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
       return
     }
 
-    // If there's an active scan, show confirmation dialog
     if (currentScan && (currentScan.status === "running" || currentScan.status === "completed")) {
       setShowConfirmDialog(true)
     } else {
-      // No active scan, go directly to dashboard
       navigate("/")
     }
   }
@@ -54,7 +39,6 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
   const handleConfirmNewScan = () => {
     setShowConfirmDialog(false)
     navigate("/")
-    // Call the onNewScan callback to reset the current scan state
     if (onNewScan) {
       onNewScan()
     }
@@ -71,10 +55,19 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
     }
   }
 
+  const handleResultsClick = (event) => {
+    if (resultsDisabled) {
+      event.preventDefault()
+      if (!authLoading) {
+        navigate("/login")
+      }
+    }
+  }
+
   return (
     <>
       <motion.header
-        className="glass-card border-b border-border/50 relative z-10"
+        className="glass-card no-contain border-b border-border/50 relative z-30"
         initial={{ y: -100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
@@ -105,29 +98,48 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
 
             {/* Navigation Links */}
             <nav className="hidden md:flex items-center space-x-8">
-              {navItems.map((item) => (
-                <Link
-                  key={item.name}
-                  to={item.path}
-                  className={`relative text-sm font-medium transition-colors duration-200 ${
-                    item.disabled
-                      ? "text-foreground/30 cursor-not-allowed"
-                      : isActive(item.path)
-                      ? "text-primary"
-                      : "text-foreground/70 hover:text-foreground"
-                  }`}
-                >
-                  {item.name}
-                  {isActive(item.path) && !item.disabled && (
-                    <motion.div
-                      className="absolute -bottom-1 left-0 right-0 h-0.5 bg-primary"
-                      layoutId="activeTab"
-                      initial={false}
-                      transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                    />
-                  )}
-                </Link>
-              ))}
+              <Link
+                to="/"
+                className={`relative text-sm font-medium transition-colors duration-200 ${
+                  !isAuthenticated || authLoading
+                    ? "text-foreground/30 cursor-not-allowed"
+                    : isDashboardActive
+                    ? "text-primary"
+                    : "text-foreground/70 hover:text-foreground"
+                }`}
+              >
+                Dashboard
+                {isDashboardActive && isAuthenticated && !authLoading && (
+                  <motion.div
+                    className="absolute -bottom-1 left-0 right-0 h-0.5 bg-primary"
+                    layoutId="activeTab"
+                    initial={false}
+                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                  />
+                )}
+              </Link>
+
+              <Link
+                to="/runs"
+                onClick={handleResultsClick}
+                className={`relative text-sm font-medium transition-colors duration-200 ${
+                  resultsDisabled
+                    ? "text-foreground/30 cursor-not-allowed"
+                    : isResultsActive
+                    ? "text-primary"
+                    : "text-foreground/70 hover:text-foreground"
+                }`}
+              >
+                Results
+                {isResultsActive && !resultsDisabled && (
+                  <motion.div
+                    className="absolute -bottom-1 left-0 right-0 h-0.5 bg-primary"
+                    layoutId="activeTab"
+                    initial={false}
+                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                  />
+                )}
+              </Link>
             </nav>
 
             {/* Auth Actions */}
@@ -207,72 +219,91 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
           </div>
 
           {/* Mobile Menu */}
-          {isMenuOpen && (
-            <motion.div
-              className="md:hidden py-4 border-t border-border/50"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <div className="flex flex-col space-y-4">
-                {navItems.map((item) => (
+          <AnimatePresence initial={false}>
+            {isMenuOpen && (
+              <motion.div
+                className="md:hidden py-4 border-t border-border/50"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="flex flex-col space-y-4">
                   <Link
-                    key={item.name}
-                    to={item.path}
+                    to="/"
                     className={`text-sm font-medium transition-colors duration-200 ${
-                      item.disabled
+                      !isAuthenticated || authLoading
                         ? "text-foreground/30 cursor-not-allowed"
-                        : isActive(item.path)
+                        : isDashboardActive
                         ? "text-primary"
                         : "text-foreground/70 hover:text-foreground"
                     }`}
                     onClick={() => {
-                      if (!item.disabled) {
+                      if (isAuthenticated && !authLoading) {
                         setIsMenuOpen(false)
                       }
                     }}
                   >
-                    {item.name}
+                    Dashboard
                   </Link>
-                ))}
-                {isAuthenticated ? (
-                  <>
-                    <button
-                      onClick={handleNewScanClick}
-                      disabled={!canStartScan}
-                      className="glass-card px-4 py-2 text-left text-sm font-medium text-foreground border border-border/50 rounded-lg hover:bg-primary/10 disabled:opacity-50"
-                    >
-                      Start new scan
-                    </button>
-                    <button
-                      onClick={handleLogoutClick}
-                      className="glass-card px-4 py-2 text-left text-sm font-medium text-foreground border border-border/50 rounded-lg hover:bg-muted/20"
-                    >
-                      Log out
-                    </button>
-                  </>
-                ) : (
-                  <div className="flex flex-col space-y-3">
-                    <Link
-                      to="/login"
-                      className="glass-card px-4 py-2 text-sm font-medium text-foreground border border-border/50 rounded-lg hover:bg-muted/20"
-                      onClick={() => setIsMenuOpen(false)}
-                    >
-                      Log in
-                    </Link>
-                    <Link
-                      to="/signup"
-                      className="bg-primary text-primary-foreground px-4 py-2 text-sm font-medium rounded-lg hover:bg-primary/90"
-                      onClick={() => setIsMenuOpen(false)}
-                    >
-                      Sign up
-                    </Link>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          )}
+
+                  <Link
+                    to="/runs"
+                    onClick={(event) => {
+                      handleResultsClick(event)
+                      if (!resultsDisabled) {
+                        setIsMenuOpen(false)
+                      }
+                    }}
+                    className={`glass-card px-4 py-2 text-sm font-medium border border-border/50 rounded-lg transition-colors ${
+                      resultsDisabled
+                        ? "text-foreground/30 cursor-not-allowed"
+                        : isResultsActive
+                        ? "text-primary"
+                        : "text-foreground/70 hover:text-foreground"
+                    }`}
+                  >
+                    Results
+                  </Link>
+
+                  {isAuthenticated ? (
+                    <>
+                      <button
+                        onClick={handleNewScanClick}
+                        disabled={!canStartScan}
+                        className="glass-card px-4 py-2 text-left text-sm font-medium text-foreground border border-border/50 rounded-lg hover:bg-primary/10 disabled:opacity-50"
+                      >
+                        Start new scan
+                      </button>
+                      <button
+                        onClick={handleLogoutClick}
+                        className="glass-card px-4 py-2 text-left text-sm font-medium text-foreground border border-border/50 rounded-lg hover:bg-muted/20"
+                      >
+                        Log out
+                      </button>
+                    </>
+                  ) : (
+                    <div className="flex flex-col space-y-3">
+                      <Link
+                        to="/login"
+                        className="glass-card px-4 py-2 text-sm font-medium text-foreground border border-border/50 rounded-lg hover:bg-muted/20"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        Log in
+                      </Link>
+                      <Link
+                        to="/signup"
+                        className="bg-primary text-primary-foreground px-4 py-2 text-sm font-medium rounded-lg hover:bg-primary/90"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        Sign up
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </motion.header>
 
@@ -344,4 +375,3 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
 }
 
 export default NavigationBar
-
