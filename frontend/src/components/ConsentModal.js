@@ -1,6 +1,6 @@
 "use client"
 import { motion, AnimatePresence } from "framer-motion"
-import { AlertTriangle, Shield, X } from "lucide-react"
+import { AlertTriangle, X } from "lucide-react"
 
 const ConsentModal = ({ isOpen, onAccept, onDecline, targetUrl }) => {
   return (

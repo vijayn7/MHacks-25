@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useParams } from "react-router-dom"
+import { useState, useEffect, useCallback } from "react"
+import { useNavigate, useParams } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import axios from "axios"
 import {
@@ -15,16 +15,45 @@ import {
   CheckCircle,
   ExternalLink,
   Activity,
-  Target,
 } from "lucide-react"
+import { API_BASE_URL } from "../lib/api"
 
 const ScanResults = () => {
   const { runId } = useParams();
+  const navigate = useNavigate();
   const [scanStatus, setScanStatus] = useState(null);
   const [findings, setFindings] = useState([]);
   const [selectedFinding, setSelectedFinding] = useState(null);
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState([]);
+
+  const fetchScanStatus = useCallback(async () => {
+    try {
+      const response = await axios.get(`/runs/${runId}`);
+      setScanStatus(response.data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Failed to fetch scan status:', error);
+      if (error.response?.status === 401) {
+        navigate('/login');
+      }
+      setLoading(false);
+    }
+  }, [navigate, runId]);
+
+  const fetchFindings = useCallback(async () => {
+    try {
+      console.log(`🔍 Fetching findings for run ${runId}`);
+      const response = await axios.get(`/runs/${runId}/findings`);
+      console.log(`✅ Found ${response.data.length} findings:`, response.data.slice(0, 3));
+      setFindings(response.data);
+    } catch (error) {
+      console.error('Failed to fetch findings:', error);
+      if (error.response?.status === 401) {
+        navigate('/login');
+      }
+    }
+  }, [navigate, runId]);
 
   useEffect(() => {
     if (!runId) return;
@@ -34,7 +63,7 @@ const ScanResults = () => {
     fetchFindings();
 
     // Set up SSE for real-time updates
-    const eventSource = new EventSource(`http://localhost:8000/runs/${runId}/stream`);
+    const eventSource = new EventSource(`${API_BASE_URL}/runs/${runId}/stream`, { withCredentials: true });
 
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
@@ -58,29 +87,7 @@ const ScanResults = () => {
       eventSource.close();
     };
 
-  }, [runId]);
-
-  const fetchScanStatus = async () => {
-    try {
-      const response = await axios.get(`/runs/${runId}`);
-      setScanStatus(response.data);
-      setLoading(false);
-    } catch (error) {
-      console.error('Failed to fetch scan status:', error);
-      setLoading(false);
-    }
-  };
-
-  const fetchFindings = async () => {
-    try {
-      console.log(`🔍 Fetching findings for run ${runId}`);
-      const response = await axios.get(`/runs/${runId}/findings`);
-      console.log(`✅ Found ${response.data.length} findings:`, response.data.slice(0, 3));
-      setFindings(response.data);
-    } catch (error) {
-      console.error('Failed to fetch findings:', error);
-    }
-  };
+  }, [runId, fetchFindings, fetchScanStatus]);
 
   const getSeverityColor = (severity) => {
     switch (severity) {
