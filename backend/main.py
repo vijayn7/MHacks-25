@@ -292,7 +292,9 @@ async def create_scan(
     # Create scan run
     run_id = str(uuid.uuid4())[:8]
 
-    notify_email = scan_request.notify_email or os.getenv("DEFAULT_NOTIFY_EMAIL", "vnannapu@umich.edu")
+    default_notify_email = (os.getenv("DEFAULT_NOTIFY_EMAIL", "vnannapu@umich.edu") or "").strip()
+
+    notify_email = (scan_request.notify_email or "").strip() or None
 
     scan_data = {
         "id": run_id,
@@ -300,7 +302,7 @@ async def create_scan(
         "name": scan_request.name,
         "status": ScanStatus.QUEUED,
         "max_pages": scan_request.max_pages,
-        "notify_email": notify_email,
+        "notify_email": notify_email or default_notify_email or None,
         "consent_ip": request.client.host,
         "user_id": user["id"],
     }

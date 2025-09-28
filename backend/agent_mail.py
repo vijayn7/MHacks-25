@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 from database import get_findings_by_run, get_scan_run
 from models import ScanStatus
@@ -17,10 +17,42 @@ AGENTMAIL_API_KEY = os.getenv("AGENTMAIL_API_KEY")
 SEVERITY_ORDER = ["critical", "high", "medium", "low", "info"]
 
 
+def _normalize_email_list(value: Optional[str]) -> List[str]:
+    """Split a comma/semicolon separated string into unique, lowercase-insensitive addresses."""
+
+    if not value:
+        return []
+
+    candidates: List[str] = []
+    seen = set()
+    for part in value.replace(";", ",").split(","):
+        addr = part.strip()
+        if not addr:
+            continue
+        lower_addr = addr.lower()
+        if lower_addr in seen:
+            continue
+        seen.add(lower_addr)
+        candidates.append(addr)
+    return candidates
+
+
 def _coalesce_notify_email(email: Optional[str]) -> Optional[str]:
-    if email and email.strip():
-        return email.strip()
-    return DEFAULT_NOTIFY_EMAIL
+    """Return a comma-separated list of recipients including the default notification email."""
+
+    recipients = _normalize_email_list(email)
+
+    default_email = (DEFAULT_NOTIFY_EMAIL or "").strip()
+    if default_email:
+        default_lower = default_email.lower()
+        seen = {addr.lower() for addr in recipients}
+        if default_lower not in seen:
+            recipients.append(default_email)
+
+    if not recipients:
+        return None
+
+    return ", ".join(recipients)
 
 
 async def prepare_scan_digest(run_id: str) -> Dict[str, Any]:
@@ -98,7 +130,8 @@ async def prepare_scan_digest(run_id: str) -> Dict[str, Any]:
         "ai_generated_findings": ai_generated_count,
         "finding_summary": severity_totals,
         "highest_severity": highest_severity,
-        "notify_email": _coalesce_notify_email(getattr(run, "notify_email", None)),
+        "notify_email": getattr(run, "notify_email", None),
+        "resolved_notify_email": _coalesce_notify_email(getattr(run, "notify_email", None)),
         "consent_ip": getattr(run, "consent_ip", None),
         "max_pages": getattr(run, "max_pages", None),
         "findings": findings_payload,
@@ -135,7 +168,7 @@ async def dispatch_post_scan_email(run_id: str, *, error_message: Optional[str] 
         digest["error"] = error_message
         logger.info("⚠️ Email will report scan failure for run %s", run_id)
 
-    recipient = _coalesce_notify_email(digest.get("notify_email"))
+    recipient = digest.get("resolved_notify_email") or _coalesce_notify_email(digest.get("notify_email"))
     if not recipient:
         logger.warning("❌ No recipient email resolved for run %s; skipping Agent Mail dispatch", run_id)
         return
