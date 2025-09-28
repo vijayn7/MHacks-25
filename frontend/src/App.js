@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import axios from "axios"
 import ScanDashboard from "./components/ScanDashboard"
 import ScanResults from "./components/ScanResults"
+import BuildScreen from "./components/BuildScreen"
 import ConsentModal from "./components/ConsentModal"
 import NavigationBar from "./components/NavigationBar"
 import { Shield } from "lucide-react"
@@ -95,7 +96,7 @@ function App() {
                 }
               />
               <Route
-                path="/scan/:runId"
+                path="/results"
                 element={
                   <motion.div
                     key="results"
@@ -104,7 +105,35 @@ function App() {
                     exit={{ opacity: 0, y: -20 }}
                     transition={{ duration: 0.5 }}
                   >
-                    <ScanResults />
+                    <ScanResults currentScan={currentScan} />
+                  </motion.div>
+                }
+              />
+              <Route
+                path="/build"
+                element={
+                  <motion.div
+                    key="build"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.5 }}
+                  >
+                    <BuildScreen />
+                  </motion.div>
+                }
+              />
+              <Route
+                path="/scan/:runId"
+                element={
+                  <motion.div
+                    key="scan-results"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.5 }}
+                  >
+                    <ScanResults currentScan={currentScan} />
                   </motion.div>
                 }
               />

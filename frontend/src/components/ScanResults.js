@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useParams } from "react-router-dom"
+import { useState, useEffect, useCallback } from "react"
+import { useParams, useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import axios from "axios"
 import {
@@ -16,20 +16,66 @@ import {
   ExternalLink,
   Activity,
   Target,
+  Search,
+  Settings,
+  Play,
 } from "lucide-react"
 
-const ScanResults = () => {
+
+const ScanResults = ({ currentScan }) => {
   const { runId } = useParams();
+  const navigate = useNavigate();
   const [scanStatus, setScanStatus] = useState(null);
   const [findings, setFindings] = useState([]);
   const [selectedFinding, setSelectedFinding] = useState(null);
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState([]);
-  const [codebasePath, setCodebasePath] = useState('');
-  const [dynamicScanning, setDynamicScanning] = useState(false);
+
+  // Handle navigation functions for "No Scans Found" message
+  const handleDashboardClick = () => {
+    navigate("/")
+  }
+
+  const handleBuildClick = () => {
+    console.log("Build screen - to be implemented")
+    alert("Build screen - to be implemented")
+  }
+
+
+  const fetchScanStatus = useCallback(async () => {
+    try {
+      const response = await axios.get(`/runs/${runId}`);
+      setScanStatus(response.data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Failed to fetch scan status:', error);
+      setLoading(false);
+    }
+  }, [runId]);
+
+  const fetchFindings = useCallback(async () => {
+    try {
+      console.log(`🔍 Fetching findings for run ${runId}`);
+      const response = await axios.get(`/runs/${runId}/findings`);
+      console.log(`✅ Found ${response.data.length} findings:`, response.data.slice(0, 3));
+      setFindings(response.data);
+    } catch (error) {
+      console.error('Failed to fetch findings:', error);
+    }
+  }, [runId]);
 
   useEffect(() => {
-    if (!runId) return;
+    // If we're on /results route without a runId, check for current scan
+    if (!runId) {
+      if (currentScan && currentScan.runId) {
+        // Redirect to the current scan
+        navigate(`/scan/${currentScan.runId}`, { replace: true })
+        return
+      }
+      // No runId and no current scan - show "No Scans Found" message
+      setLoading(false)
+      return
+    }
 
     // Fetch initial scan status and findings
     fetchScanStatus();
@@ -49,12 +95,6 @@ const ScanResults = () => {
       } else if (data.event_type === 'scan_completed') {
         fetchScanStatus();
         fetchFindings();
-      } else if (data.event_type === 'dynamic_scan_completed') {
-        setDynamicScanning(false);
-        fetchFindings(); // Refresh findings to show AI-generated ones
-      } else if (data.event_type === 'dynamic_scan_error') {
-        setDynamicScanning(false);
-        alert('AI-powered analysis failed: ' + data.data.error);
       }
     };
 
@@ -66,29 +106,9 @@ const ScanResults = () => {
       eventSource.close();
     };
 
-  }, [runId]);
+  }, [runId, fetchScanStatus, fetchFindings]);
 
-  const fetchScanStatus = async () => {
-    try {
-      const response = await axios.get(`/runs/${runId}`);
-      setScanStatus(response.data);
-      setLoading(false);
-    } catch (error) {
-      console.error('Failed to fetch scan status:', error);
-      setLoading(false);
-    }
-  };
-
-  const fetchFindings = async () => {
-    try {
-      console.log(`🔍 Fetching findings for run ${runId}`);
-      const response = await axios.get(`/runs/${runId}/findings`);
-      console.log(`✅ Found ${response.data.length} findings:`, response.data.slice(0, 3));
-      setFindings(response.data);
-    } catch (error) {
-      console.error('Failed to fetch findings:', error);
-    }
-  };
+  
 
   const getSeverityColor = (severity) => {
     switch (severity) {
@@ -130,27 +150,82 @@ const ScanResults = () => {
     }
   };
 
-  const runDynamicScan = async () => {
-    if (!codebasePath.trim()) {
-      alert('Please provide a codebase path for AI-powered analysis');
-      return;
-    }
+  // Show "No Scans Found" message when no runId and no current scan
+  if (!runId && !currentScan) {
+    return (
+      <motion.div 
+        className="px-4 py-6" 
+        initial={{ opacity: 0, y: 20 }} 
+        animate={{ opacity: 1, y: 0 }} 
+        transition={{ duration: 0.5 }}
+      >
+        {/* Header */}
+        <motion.div
+          className="glass-card p-8 mb-8 rounded-2xl"
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.1 }}
+        >
+          <div className="flex items-center space-x-6">
+            <motion.div
+              className="w-16 h-16 bg-primary/20 rounded-xl flex items-center justify-center"
+              whileHover={{ scale: 1.1, rotate: 5 }}
+            >
+              <Search className="h-8 w-8 text-primary" />
+            </motion.div>
+            <div>
+              <h1 className="text-3xl font-bold text-foreground mb-2">Scan Results</h1>
+              <p className="text-muted-foreground text-lg">
+                View and analyze your security scan results
+              </p>
+            </div>
+          </div>
+        </motion.div>
 
-    try {
-      setDynamicScanning(true);
-      const response = await axios.post(`http://localhost:8000/runs/${runId}/dynamic-scan`, {
-        codebase_path: codebasePath.trim()
-      });
-      
-      if (response.data.status === 'completed') {
-        console.log(`AI-powered analysis completed! Found ${response.data.ai_generated_findings} new findings.`);
-      }
-    } catch (error) {
-      console.error('Dynamic scan error:', error);
-      alert('Dynamic scan failed: ' + (error.response?.data?.detail || error.message));
-      setDynamicScanning(false);
-    }
-  };
+        {/* No Scans Message */}
+        <motion.div
+          className="glass-card p-8 rounded-2xl text-center"
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.2 }}
+        >
+          <motion.div
+            className="w-24 h-24 bg-blue-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6"
+            whileHover={{ scale: 1.1 }}
+          >
+            <Search className="h-12 w-12 text-blue-400" />
+          </motion.div>
+          
+          <h2 className="text-2xl font-bold text-foreground mb-4">No Scans Found</h2>
+          <p className="text-muted-foreground text-lg mb-8 max-w-2xl mx-auto">
+            You currently have no scans. Go to the Dashboard to start a full scan or customize your own on the Build screen.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <motion.button
+              onClick={handleDashboardClick}
+              className="glass-card px-8 py-4 text-foreground hover:bg-primary/10 transition-all duration-300 font-medium rounded-lg border border-primary/20 hover:border-primary/40 flex items-center justify-center"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <Play className="h-5 w-5 mr-2" />
+              Go to Dashboard
+            </motion.button>
+
+            <motion.button
+              onClick={handleBuildClick}
+              className="glass-card px-8 py-4 text-foreground hover:bg-primary/10 transition-all duration-300 font-medium rounded-lg border border-primary/20 hover:border-primary/40 flex items-center justify-center"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <Settings className="h-5 w-5 mr-2" />
+              Build Screen
+            </motion.button>
+          </div>
+        </motion.div>
+      </motion.div>
+    )
+  }
 
   if (loading) {
     return (
@@ -228,64 +303,6 @@ const ScanResults = () => {
         </div>
       </motion.div>
 
-      {/* AI-Powered Dynamic Scan Section */}
-      <motion.div
-        className="glass-card p-6 mb-8 rounded-2xl border border-primary/20"
-        initial={{ y: -20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.2 }}
-      >
-        <div className="flex items-center space-x-3 mb-4">
-          <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-            <Activity className="h-5 w-5 text-white" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-foreground">AI-Powered Dynamic Analysis</h2>
-            <p className="text-muted-foreground">Analyze your codebase with advanced AI-generated security tests</p>
-          </div>
-        </div>
-        
-        <div className="flex items-center space-x-4">
-          <input
-            type="text"
-            placeholder="Enter codebase path (e.g., /path/to/your/code)"
-            value={codebasePath}
-            onChange={(e) => setCodebasePath(e.target.value)}
-            className="flex-1 px-4 py-2 bg-background/50 border border-border/50 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-          />
-          <motion.button
-            onClick={runDynamicScan}
-            disabled={dynamicScanning || !codebasePath.trim()}
-            className="px-6 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            {dynamicScanning ? (
-              <>
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
-                >
-                  <RefreshCw className="h-4 w-4" />
-                </motion.div>
-                <span>Analyzing...</span>
-              </>
-            ) : (
-              <>
-                <Activity className="h-4 w-4" />
-                <span>Run AI Analysis</span>
-              </>
-            )}
-          </motion.button>
-        </div>
-        
-        <div className="mt-4 text-sm text-muted-foreground">
-          <p>🤖 Uses Gemini AI to generate targeted security tests based on your actual code patterns</p>
-          <p>🎯 Covers 8 attack categories with 50+ sophisticated attack vectors</p>
-          <p>⚡ Results appear in real-time below with traditional findings</p>
-        </div>
-      </motion.div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Findings List */}
         <motion.div
@@ -351,16 +368,6 @@ const ScanResults = () => {
                             <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
                               {finding.category}
                             </span>
-                            {finding.ai_generated && (
-                              <span className="px-2 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs rounded-full font-medium">
-                                AI-Generated
-                              </span>
-                            )}
-                            {finding.owasp_category && (
-                              <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full font-medium">
-                                {finding.owasp_category}
-                              </span>
-                            )}
                           </div>
                           <h3 className="font-bold text-foreground mb-2 text-lg">{finding.title}</h3>
                           <p className="text-muted-foreground line-clamp-2 leading-relaxed">{finding.description}</p>
