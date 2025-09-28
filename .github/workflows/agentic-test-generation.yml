@@ -1,0 +1,337 @@
+name: Agentic Security Test Generation
+
+on:
+  workflow_dispatch:
+    inputs:
+      user_request:
+        description: 'User test request'
+        required: true
+        type: string
+      target_url:
+        description: 'Target URL to test'
+        required: true
+        type: string
+      test_description:
+        description: 'Description of what to test'
+        required: true
+        type: string
+      attack_categories:
+        description: 'Attack categories to focus on'
+        required: true
+        type: string
+      codebase_path:
+        description: 'Path to codebase for analysis'
+        required: false
+        type: string
+      workflow_id:
+        description: 'Unique workflow ID'
+        required: true
+        type: string
+
+jobs:
+  generate-and-execute-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        pip install -r backend/requirements.txt
+        pip install playwright selenium requests beautifulsoup4
+        
+    - name: Install Playwright browsers
+      run: playwright install chromium
+        
+    - name: Generate test cases using AI
+      id: generate_tests
+      run: |
+        python -c "
+        import sys
+        sys.path.append('backend')
+        from test_generation import generate_detailed_tests
+        from pydantic import BaseModel
+        from typing import List
+        
+        class WorkflowTriggerRequest(BaseModel):
+            user_request: str
+            target_url: str
+            test_description: str
+            attack_categories: List[str]
+            codebase_path: str = None
+        
+        request = WorkflowTriggerRequest(
+            user_request='${{ github.event.inputs.user_request }}',
+            target_url='${{ github.event.inputs.target_url }}',
+            test_description='${{ github.event.inputs.test_description }}',
+            attack_categories='${{ github.event.inputs.attack_categories }}'.split(','),
+            codebase_path='${{ github.event.inputs.codebase_path }}'
+        )
+        
+        result = generate_detailed_tests(request)
+        print(f'Generated {len(result.get(\"test_cases\", []))} test cases')
+        "
+        
+    - name: Create test execution script
+      run: |
+        cat > execute_tests.py << 'EOF'
+        import asyncio
+        import json
+        import requests
+        from playwright.async_api import async_playwright
+        from datetime import datetime
+        
+        class TestExecutor:
+            def __init__(self, target_url, test_cases):
+                self.target_url = target_url
+                self.test_cases = test_cases
+                self.results = []
+                
+            async def execute_test(self, test_case):
+                print(f"Executing test: {test_case['test_name']}")
+                
+                async with async_playwright() as p:
+                    browser = await p.chromium.launch()
+                    page = await browser.new_page()
+                    
+                    try:
+                        # Navigate to target URL
+                        await page.goto(self.target_url)
+                        
+                        # Execute test based on attack type
+                        vulnerability_found = False
+                        evidence = []
+                        
+                        if 'injection' in test_case['attack_type'].lower():
+                            vulnerability_found = await self.test_injection(page, test_case)
+                        elif 'authentication' in test_case['attack_type'].lower():
+                            vulnerability_found = await self.test_authentication(page, test_case)
+                        elif 'authorization' in test_case['attack_type'].lower():
+                            vulnerability_found = await self.test_authorization(page, test_case)
+                        else:
+                            vulnerability_found = await self.test_general(page, test_case)
+                        
+                        result = {
+                            'test_name': test_case['test_name'],
+                            'test_id': f"test_{len(self.results)}",
+                            'status': 'completed',
+                            'vulnerability_found': vulnerability_found,
+                            'evidence': evidence,
+                            'execution_time': datetime.now().isoformat(),
+                            'risk_level': test_case['risk_level']
+                        }
+                        
+                        self.results.append(result)
+                        print(f"Test completed: {test_case['test_name']} - Vulnerability: {vulnerability_found}")
+                        
+                    except Exception as e:
+                        print(f"Test failed: {test_case['test_name']} - Error: {str(e)}")
+                        result = {
+                            'test_name': test_case['test_name'],
+                            'test_id': f"test_{len(self.results)}",
+                            'status': 'failed',
+                            'error': str(e),
+                            'execution_time': datetime.now().isoformat()
+                        }
+                        self.results.append(result)
+                    
+                    finally:
+                        await browser.close()
+                        
+            async def test_injection(self, page, test_case):
+                # Test for injection vulnerabilities
+                for payload in test_case.get('payloads', []):
+                    try:
+                        # Look for input fields
+                        inputs = await page.query_selector_all('input[type="text"], input[type="search"], textarea')
+                        
+                        for input_field in inputs:
+                            await input_field.fill(payload)
+                            await input_field.press('Enter')
+                            
+                            # Check for error messages or suspicious responses
+                            content = await page.content()
+                            for pattern in test_case.get('detection_patterns', []):
+                                if pattern.lower() in content.lower():
+                                    return True
+                    except:
+                        continue
+                return False
+                
+            async def test_authentication(self, page, test_case):
+                # Test authentication bypass
+                try:
+                    # Look for login forms
+                    login_form = await page.query_selector('form[action*="login"], form[action*="auth"]')
+                    if login_form:
+                        # Try common bypass techniques
+                        username_input = await page.query_selector('input[name*="user"], input[name*="email"]')
+                        password_input = await page.query_selector('input[name*="pass"]')
+                        
+                        if username_input and password_input:
+                            await username_input.fill("admin")
+                            await password_input.fill("' OR '1'='1")
+                            await page.click('button[type="submit"], input[type="submit"]')
+                            
+                            # Check if login was successful
+                            await page.wait_for_timeout(2000)
+                            url = page.url
+                            if 'dashboard' in url or 'admin' in url or 'welcome' in url:
+                                return True
+                except:
+                    pass
+                return False
+                
+            async def test_authorization(self, page, test_case):
+                # Test authorization bypass
+                try:
+                    # Try to access protected resources
+                    protected_paths = ['/admin', '/dashboard', '/api/users', '/profile']
+                    
+                    for path in protected_paths:
+                        try:
+                            response = await page.goto(f"{self.target_url}{path}")
+                            if response and response.status == 200:
+                                content = await page.content()
+                                if 'unauthorized' not in content.lower() and 'forbidden' not in content.lower():
+                                    return True
+                        except:
+                            continue
+                except:
+                    pass
+                return False
+                
+            async def test_general(self, page, test_case):
+                # General security testing
+                try:
+                    # Check for common security headers
+                    response = await page.goto(self.target_url)
+                    headers = response.headers if response else {}
+                    
+                    security_headers = ['x-frame-options', 'x-content-type-options', 'x-xss-protection']
+                    missing_headers = [h for h in security_headers if h not in headers]
+                    
+                    if missing_headers:
+                        return True
+                        
+                    # Check for sensitive information disclosure
+                    content = await page.content()
+                    sensitive_patterns = ['password', 'secret', 'key', 'token', 'api_key']
+                    
+                    for pattern in sensitive_patterns:
+                        if pattern in content.lower():
+                            return True
+                            
+                except:
+                    pass
+                return False
+                
+            async def run_all_tests(self):
+                print(f"Starting execution of {len(self.test_cases)} test cases...")
+                
+                for test_case in self.test_cases:
+                    await self.execute_test(test_case)
+                    
+                print(f"Completed execution of {len(self.results)} tests")
+                return self.results
+        
+        # Load test cases from previous step
+        with open('test_cases.json', 'r') as f:
+            test_cases = json.load(f)
+            
+        # Execute tests
+        executor = TestExecutor('${{ github.event.inputs.target_url }}', test_cases)
+        results = await executor.run_all_tests()
+        
+        # Save results
+        with open('test_results.json', 'w') as f:
+            json.dump(results, f, indent=2)
+            
+        print(f"Test execution completed. Found {len([r for r in results if r.get('vulnerability_found')])} vulnerabilities.")
+        EOF
+        
+    - name: Execute generated tests
+      run: |
+        python execute_tests.py
+        
+    - name: Generate test report
+      run: |
+        cat > generate_report.py << 'EOF'
+        import json
+        from datetime import datetime
+        
+        # Load test results
+        with open('test_results.json', 'r') as f:
+            results = json.load(f)
+            
+        # Generate summary
+        total_tests = len(results)
+        vulnerabilities_found = len([r for r in results if r.get('vulnerability_found')])
+        failed_tests = len([r for r in results if r.get('status') == 'failed'])
+        
+        # Categorize by severity
+        severity_counts = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0}
+        for result in results:
+            if result.get('vulnerability_found'):
+                severity = result.get('risk_level', 'medium').lower()
+                severity_counts[severity] = severity_counts.get(severity, 0) + 1
+        
+        # Generate findings
+        findings = []
+        for i, result in enumerate(results):
+            if result.get('vulnerability_found'):
+                finding = {
+                    'id': f"finding_{i+1}",
+                    'title': f"Security Vulnerability: {result['test_name']}",
+                    'severity': result.get('risk_level', 'medium').lower(),
+                    'description': f"Automated test detected a potential security vulnerability in: {result['test_name']}",
+                    'evidence': result.get('evidence', []),
+                    'test_case': result['test_name'],
+                    'timestamp': result.get('execution_time', datetime.now().isoformat())
+                }
+                findings.append(finding)
+        
+        # Create comprehensive report
+        report = {
+            'workflow_id': '${{ github.event.inputs.workflow_id }}',
+            'target_url': '${{ github.event.inputs.target_url }}',
+            'user_request': '${{ github.event.inputs.user_request }}',
+            'execution_timestamp': datetime.now().isoformat(),
+            'summary': {
+                'total_tests': total_tests,
+                'vulnerabilities_found': vulnerabilities_found,
+                'failed_tests': failed_tests,
+                'success_rate': f"{((total_tests - failed_tests) / total_tests * 100):.1f}%" if total_tests > 0 else "0%"
+            },
+            'severity_breakdown': severity_counts,
+            'findings': findings,
+            'test_results': results
+        }
+        
+        # Save report
+        with open('security_test_report.json', 'w') as f:
+            json.dump(report, f, indent=2)
+            
+        print(f"Report generated: {vulnerabilities_found} vulnerabilities found out of {total_tests} tests")
+        EOF
+        
+        python generate_report.py
+        
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-test-results-${{ github.event.inputs.workflow_id }}
+        path: |
+          security_test_report.json
+          test_results.json
+          
+    - name: Notify completion
+      run: |
+        echo "Test generation and execution completed for workflow ${{ github.event.inputs.workflow_id }}"
+        echo "Results uploaded as artifact: security-test-results-${{ github.event.inputs.workflow_id }}"

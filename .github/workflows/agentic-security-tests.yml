@@ -1,0 +1,273 @@
+name: Agentic Security Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'Target URL to test'
+        required: true
+        default: 'https://httpbin.org'
+      test_request:
+        description: 'What to test for'
+        required: true
+        default: 'Test for common vulnerabilities'
+
+jobs:
+  security-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch full history for better analysis
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        python -m playwright install
+    
+    - name: Analyze codebase
+      id: analyze
+      run: |
+        python -c "
+        import asyncio
+        import sys
+        sys.path.append('scanner')
+        from github_code_analyzer import GitHubCodeAnalyzer
+        
+        async def analyze():
+            analyzer = GitHubCodeAnalyzer('${{ secrets.GITHUB_TOKEN }}')
+            code_files = await analyzer.analyze_repository('${{ github.repository_owner }}', '${{ github.event.repository.name }}', '${{ github.ref_name }}')
+            
+            # Save analysis results
+            import json
+            with open('code_analysis.json', 'w') as f:
+                json.dump([{
+                    'path': f.path,
+                    'language': f.language.value,
+                    'functions': f.functions,
+                    'vulnerabilities': f.vulnerabilities,
+                    'imports': f.imports
+                } for f in code_files], f, indent=2)
+            
+            print(f'Analyzed {len(code_files)} files')
+            return len(code_files)
+        
+        file_count = asyncio.run(analyze())
+        echo "file_count=$file_count" >> $GITHUB_OUTPUT
+        "
+    
+    - name: Generate test cases
+      id: generate
+      run: |
+        python -c "
+        import asyncio
+        import sys
+        import json
+        sys.path.append('scanner')
+        from github_code_analyzer import GitHubCodeAnalyzer
+        
+        async def generate_tests():
+            # Load analysis results
+            with open('code_analysis.json', 'r') as f:
+                analysis_data = json.load(f)
+            
+            # Convert back to CodeFile objects
+            from github_code_analyzer import CodeFile, CodeLanguage
+            code_files = []
+            for data in analysis_data:
+                code_file = CodeFile(
+                    path=data['path'],
+                    language=CodeLanguage(data['language']),
+                    content='',  # We don't need content for test generation
+                    functions=data['functions'],
+                    classes=[],
+                    imports=data['imports'],
+                    vulnerabilities=data['vulnerabilities'],
+                    sha='',
+                    size=0
+                )
+                code_files.append(code_file)
+            
+            # Generate test cases
+            analyzer = GitHubCodeAnalyzer('${{ secrets.GITHUB_TOKEN }}')
+            user_request = '${{ github.event.inputs.test_request || \"Test for common vulnerabilities\" }}'
+            test_cases = await analyzer.generate_targeted_tests(code_files, user_request)
+            
+            # Save test cases
+            with open('generated_tests.json', 'w') as f:
+                json.dump(test_cases, f, indent=2)
+            
+            print(f'Generated {len(test_cases)} test cases')
+            return len(test_cases)
+        
+        test_count = asyncio.run(generate_tests())
+        echo "test_count=$test_count" >> $GITHUB_OUTPUT
+        "
+    
+    - name: Execute security tests
+      id: execute
+      run: |
+        python -c "
+        import asyncio
+        import sys
+        import json
+        sys.path.append('scanner')
+        from test_runner import TestRunner
+        
+        async def execute_tests():
+            # Load test cases
+            with open('generated_tests.json', 'r') as f:
+                test_cases = json.load(f)
+            
+            # Execute tests
+            target_url = '${{ github.event.inputs.target_url || \"https://httpbin.org\" }}'
+            runner = TestRunner(headless=True)
+            results = await runner.run_test_cases(test_cases, target_url)
+            
+            # Generate report
+            report = runner.generate_report(results)
+            
+            # Save report
+            with open('security_report.json', 'w') as f:
+                json.dump(report, f, indent=2, default=str)
+            
+            print(f'Executed {len(results)} tests')
+            print(f'Found {report[\"summary\"][\"total_findings\"]} vulnerabilities')
+            print(f'Risk score: {report[\"summary\"][\"risk_score\"]}')
+            
+            return report
+        
+        report = asyncio.run(execute_tests())
+        echo \"findings_count=$report['summary']['total_findings']\" >> $GITHUB_OUTPUT
+        echo \"risk_score=$report['summary']['risk_score']\" >> $GITHUB_OUTPUT
+        "
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-test-results
+        path: |
+          security_report.json
+          generated_tests.json
+          code_analysis.json
+        retention-days: 30
+    
+    - name: Comment on PR
+      if: github.event_name == 'pull_request'
+      run: |
+        python -c "
+        import json
+        
+        # Load report
+        with open('security_report.json', 'r') as f:
+            report = json.load(f)
+        
+        # Create comment
+        comment = f'''## 🔒 Security Test Results
+        
+        **Summary:**
+        - Total Tests: {report['summary']['total_tests']}
+        - Completed: {report['summary']['completed_tests']}
+        - Findings: {report['summary']['total_findings']}
+        - Risk Score: {report['summary']['risk_score']}
+        
+        **Severity Breakdown:**
+        '''
+        
+        for severity, count in report['severity_breakdown'].items():
+            if count > 0:
+                comment += f'- {severity.capitalize()}: {count}\n'
+        
+        if report['top_findings']:
+            comment += '\n**Top Findings:**\n'
+            for i, finding in enumerate(report['top_findings'][:5], 1):
+                comment += f'{i}. {finding[\"description\"]} (Severity: {finding[\"severity\"]})\n'
+        
+        comment += '\n📄 Full report available in artifacts'
+        
+        # Write comment to file
+        with open('pr_comment.md', 'w') as f:
+            f.write(comment)
+        "
+    
+    - name: Create PR comment
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const comment = fs.readFileSync('pr_comment.md', 'utf8');
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });
+    
+    - name: Create security issue
+      if: github.event_name == 'push' && steps.execute.outputs.findings_count > 0
+      run: |
+        python -c "
+        import json
+        
+        # Load report
+        with open('security_report.json', 'r') as f:
+            report = json.load(f)
+        
+        # Create issue body
+        issue_body = f'''## 🚨 Security Vulnerabilities Found
+        
+        **Risk Score:** {report['summary']['risk_score']}
+        **Total Findings:** {report['summary']['total_findings']}
+        
+        **Severity Breakdown:**
+        '''
+        
+        for severity, count in report['severity_breakdown'].items():
+            if count > 0:
+                issue_body += f'- {severity.capitalize()}: {count}\n'
+        
+        if report['top_findings']:
+            issue_body += '\n**Critical Findings:**\n'
+            for finding in report['top_findings']:
+                if finding['severity'] in ['critical', 'high']:
+                    issue_body += f'- {finding[\"description\"]}\n'
+                    issue_body += f'  - Type: {finding[\"type\"]}\n'
+                    issue_body += f'  - File: {finding.get(\"target_file\", \"Unknown\")}\n'
+                    issue_body += f'  - Mitigation: {finding.get(\"mitigation\", \"Review and fix\")}\n\n'
+        
+        issue_body += '\n📄 Full report available in artifacts'
+        
+        # Write issue body to file
+        with open('security_issue.md', 'w') as f:
+            f.write(issue_body)
+        "
+    
+    - name: Create security issue
+      if: github.event_name == 'push' && steps.execute.outputs.findings_count > 0
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const issueBody = fs.readFileSync('security_issue.md', 'utf8');
+          
+          github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: '🚨 Security Vulnerabilities Detected',
+            body: issueBody,
+            labels: ['security', 'vulnerability', 'high-priority']
+          });

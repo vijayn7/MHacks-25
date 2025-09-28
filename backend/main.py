@@ -32,6 +32,11 @@ from pathlib import Path
 # Add scanner directory to path for dynamic scanner
 sys.path.append(str(Path(__file__).parent.parent / "scanner"))
 
+# Import test generation router
+from test_generation import router as test_generation_router
+from github_integration import router as github_integration_router
+from github_oauth import router as github_oauth_router
+
 app = FastAPI(
     title="Swarm Scanner API",
     version="1.0.0",
@@ -935,6 +940,11 @@ async def run_dynamic_scan(run_id: str, codebase_path: str):
                 "timestamp": datetime.now().isoformat()
             })
         raise HTTPException(status_code=500, detail=f"Dynamic scan failed: {str(e)}")
+
+# Include test generation router
+app.include_router(test_generation_router, prefix="/api", tags=["test-generation"])
+app.include_router(github_integration_router, prefix="/api", tags=["github-integration"])
+app.include_router(github_oauth_router, prefix="/api", tags=["github-oauth"])
 
 if __name__ == "__main__":
     import uvicorn

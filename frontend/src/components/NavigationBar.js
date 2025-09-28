@@ -20,6 +20,7 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
 
   const navItems = [
     { name: "Dashboard", path: "/" },
+    { name: "AI Assistant", path: "/agentic" },
     { name: "Blocks", path: "/blocks" },
     { name: "Results", path: "/runs" },
   ]
@@ -33,6 +34,9 @@ const NavigationBar = ({ currentScan, onNewScan, user, onLogout, authLoading = f
     }
     if (path === "/blocks") {
       return location.pathname === "/blocks"
+    }
+    if (path === "/agentic") {
+      return location.pathname === "/agentic"
     }
     return location.pathname === path
   }
