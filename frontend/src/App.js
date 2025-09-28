@@ -1,8 +1,5 @@
-"use client"
-
-
 import { useState } from "react"
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom"
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import axios from "axios"
 import ScanDashboard from "./components/ScanDashboard"
@@ -10,7 +7,6 @@ import ScanResults from "./components/ScanResults"
 import BuildScreen from "./components/BuildScreen"
 import ConsentModal from "./components/ConsentModal"
 import NavigationBar from "./components/NavigationBar"
-import { Shield } from "lucide-react"
 import "./index.css"
 
 
